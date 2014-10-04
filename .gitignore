@@ -1,0 +1,7 @@
+*.pyc
+virtualenv_run
+.tox
+MANIFEST
+sprocket.egg-info
+.coverage
+docs/build
