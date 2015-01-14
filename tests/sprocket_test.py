@@ -1,6 +1,7 @@
 import BaseHTTPServer
 import json
 import logging
+import mock
 import SocketServer
 import threading
 import time
@@ -108,16 +109,13 @@ def test_fetch_body(server_url):
 
 def test_future_callback(server_url):
     condition = threading.Condition()
-
-    def done_callback(future):
-        with condition:
-            assert future.result().code == 200
-            condition.notify()
+    done_callback = mock.Mock()
 
     with condition:
         future = sprocket.fetch(server_url)
         future.add_done_callback(done_callback)
         condition.wait(1)
+        done_callback.assert_called_once_with(future)
 
 
 def test_future_cancel(server_url):
