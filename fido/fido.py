@@ -14,7 +14,7 @@ from twisted.web.http_headers import Headers
 import __about__
 
 
-DEFAULT_USER_AGENT = 'Sprocket/%s' % __about__.__version__
+DEFAULT_USER_AGENT = 'Fido/%s' % __about__.__version__
 
 DEFAULT_CONTENT_TYPE = 'application/json'
 

@@ -3,9 +3,9 @@ __all__ = [
     "__email__", "__license__"
 ]
 
-__title__ = "sprocket"
+__title__ = "fido"
 __summary__ = "Intelligent asynchronous HTTP client"
-__uri__ = "https://gitweb.yelpcorp.com/?p=sprocket.git"
+__uri__ = "https://github.com/Yelp/fido"
 
 __version__ = "1.0.0"
 

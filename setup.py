@@ -8,7 +8,7 @@ from setuptools import find_packages, setup
 base_dir = os.path.dirname(__file__)
 
 about = {}
-with open(os.path.join(base_dir, "sprocket", "__about__.py")) as f:
+with open(os.path.join(base_dir, "fido", "__about__.py")) as f:
     exec(f.read(), about)
 
 install_requires = [

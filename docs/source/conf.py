@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# sprocket documentation build configuration file, created by
+# fido documentation build configuration file, created by
 # sphinx-quickstart on Fri May 13 14:16:02 2011.
 #
 # This file is execfile()d with the current directory set to its containing dir.
@@ -58,7 +58,7 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'Sprocket'
+project = u'Fido'
 copyright = u'Yelp Inc'
 
 # The version info for the project you're documenting, acts as replacement for
@@ -68,7 +68,7 @@ copyright = u'Yelp Inc'
 
 base_dir = os.path.join(os.path.dirname(__file__), os.pardir, os.pardir)
 about = {}
-with open(os.path.join(base_dir, "sprocket", "__about__.py")) as f:
+with open(os.path.join(base_dir, "fido", "__about__.py")) as f:
     exec(f.read(), about)
 
 version = release = about["__version__"]
@@ -185,7 +185,7 @@ html_static_path = ['_static']
 #html_file_suffix = None
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'sprocketdoc'
+htmlhelp_basename = 'fidodoc'
 
 
 # -- Options for LaTeX output --------------------------------------------------
@@ -199,7 +199,7 @@ htmlhelp_basename = 'sprocketdoc'
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass [howto/manual]).
 latex_documents = [
-  ('index', 'sprocket.tex', u'sprocket Documentation',
+  ('index', 'fido.tex', u'fido Documentation',
    u'Yelp Inc', 'manual'),
 ]
 
@@ -232,7 +232,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-	('index', 'sprocket', u'Sprocket Documentation',
+	('index', 'fido', u'Fido Documentation',
 	 [u'Yelp Inc'], 1)
 ]
 
