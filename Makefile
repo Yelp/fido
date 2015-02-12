@@ -8,6 +8,6 @@ docs:
 
 clean:
 	find . -name '*.pyc' -delete
-	rm -rf sprocket.egg-info
+	rm -rf fido.egg-info
 	rm -rf docs/build
 	rm -f MANIFEST

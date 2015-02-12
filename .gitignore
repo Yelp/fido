@@ -2,6 +2,6 @@
 virtualenv_run
 .tox
 MANIFEST
-sprocket.egg-info
+fido.egg-info
 .coverage
 docs/build
