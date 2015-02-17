@@ -1,5 +1,14 @@
 Fido
 ********
+.. image:: https://travis-ci.org/Yelp/fido.svg?branch=master
+    :target: https://travis-ci.org/Yelp/fido
+
+.. image:: https://coveralls.io/repos/Yelp/fido/badge.svg
+  :target: https://coveralls.io/r/Yelp/fido
+
+.. image:: https://pypip.in/version/fido/badge.svg?style=flat
+    :target: https://pypi.python.org/pypi/fido/
+    :alt: PyPi version
 
 Introduction
 ============
@@ -38,7 +47,7 @@ Installation
 
 Fido can be installed using `pip install`, like so::
 
-    $ pip install --upgrade git+git://github.com/Yelp/fido
+    $ pip install --upgrade fido
 
 License
 ========
