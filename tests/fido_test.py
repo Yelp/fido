@@ -62,7 +62,7 @@ def test_fetch_basic(server_url):
 
 
 def test_fetch_timeout(server_url):
-    with pytest.raises(twisted.internet.defer.CancelledError):
+    with pytest.raises(twisted.web._newclient.ResponseNeverReceived):
         fido.fetch(server_url + 'slow', timeout=0.5).result()
 
 

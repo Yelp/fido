@@ -12,6 +12,7 @@ with open(os.path.join(base_dir, "fido", "__about__.py")) as f:
     exec(f.read(), about)
 
 install_requires = [
+    'twisted >= 15.0.0',
     'crochet',
     'service_identity',
     'pyOpenSSL',
