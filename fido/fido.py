@@ -9,9 +9,9 @@ from twisted.internet.defer import Deferred
 from twisted.internet.protocol import Protocol
 from twisted.web.client import Agent
 from twisted.web.client import FileBodyProducer
-from twisted.web.http_headers import Headers
 
 import __about__
+from common import listify_headers
 
 
 DEFAULT_USER_AGENT = 'Fido/%s' % __about__.__version__
@@ -89,7 +89,7 @@ def fetch_inner(url, method, headers, body, future, timeout):
     deferred = Agent(reactor).request(
         method=method,
         uri=url,
-        headers=Headers(headers),
+        headers=listify_headers(headers),
         bodyProducer=bodyProducer)
 
     # Fetch the body once we've received the headers
