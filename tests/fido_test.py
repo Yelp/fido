@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 import BaseHTTPServer
 import json
 import logging
@@ -52,6 +55,19 @@ def server_url():
     yield 'http://%s:%d/' % (httpd.server_address[0], httpd.server_address[1])
     httpd.server_close()
     httpd_thread.join()
+
+
+@mock.patch('fido.fido.concurrent.futures.Future')
+@mock.patch('fido.fido.fetch_inner', return_value=None)
+@mock.patch('fido.fido.crochet.setup', return_value=None)
+def test_unicode_url(mock_future, mock_inner, _):
+    mock_future.configure_mock(
+        **{'set_running_or_notify_cancel.return_value': True})
+    fido.fetch(u'繁')
+    mock_inner.assert_called_once_with('\xe7\xb9\x81',
+                                       mock.ANY, mock.ANY,
+                                       mock.ANY, mock.ANY,
+                                       mock.ANY)
 
 
 def test_fetch_basic(server_url):
