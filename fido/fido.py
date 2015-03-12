@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 from cStringIO import StringIO
 import json
 
@@ -132,6 +135,8 @@ def fetch(url, timeout=DEFAULT_TIMEOUT, method='GET',
     :returns: a :py:class:`concurrent.futures.Future` that returns a
         :py:class:`Response` if the request is successful.
     """
+    if isinstance(url, unicode):
+        url = url.encode('utf-8')
 
     # Make a copy to avoid mutating the original value
     headers = dict(headers)
