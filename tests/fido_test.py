@@ -186,6 +186,7 @@ def test_get_agent_no_http_proxy():
 
 
 def test_get_agent_with_http_proxy():
-    with mock.patch.dict('os.environ', {'http_proxy': 'http://localhost:8000'}):
+    with mock.patch.dict('os.environ',
+                         {'http_proxy': 'http://localhost:8000'}):
         agent = fido.fido.get_agent(mock.Mock())
     assert isinstance(agent, ProxyAgent)
