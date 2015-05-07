@@ -13,6 +13,7 @@ import concurrent.futures
 import pytest
 import twisted.internet.error
 import twisted.internet.defer
+from twisted.web.client import Agent, ProxyAgent
 
 import fido
 
@@ -176,3 +177,15 @@ def test_future_as_completed(server_url):
     futures = [fido.fetch(server_url) for _ in xrange(10)]
     for future in concurrent.futures.as_completed(futures):
         assert future.done()
+
+
+def test_get_agent_no_http_proxy():
+    with mock.patch.dict('os.environ', clear=True):
+        agent = fido.fido.get_agent(mock.Mock())
+    assert isinstance(agent, Agent)
+
+
+def test_get_agent_with_http_proxy():
+    with mock.patch.dict('os.environ', {'http_proxy':'http://localhost:8000'}):
+        agent = fido.fido.get_agent(mock.Mock())
+    assert isinstance(agent, ProxyAgent)

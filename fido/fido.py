@@ -3,14 +3,17 @@
 
 from cStringIO import StringIO
 import json
+import os
+from urlparse import urlparse
 
 import concurrent.futures
 import crochet
-import twisted.web.client
 from twisted.internet import reactor
 from twisted.internet.defer import Deferred
+from twisted.internet.endpoints import TCP4ClientEndpoint
 from twisted.internet.protocol import Protocol
-from twisted.web.client import Agent
+import twisted.web.client
+from twisted.web.client import Agent, ProxyAgent
 from twisted.web.client import FileBodyProducer
 from twisted.web.http_headers import Headers
 
@@ -89,7 +92,8 @@ def fetch_inner(url, method, headers, body, future, timeout):
     bodyProducer = None
     if body:
         bodyProducer = FileBodyProducer(StringIO(body))
-    deferred = Agent(reactor).request(
+
+    deferred = get_agent(reactor).request(
         method=method,
         uri=url,
         headers=Headers(headers),
@@ -110,6 +114,26 @@ def fetch_inner(url, method, headers, body, future, timeout):
     finished.addBoth(cancel_timer)
 
     return finished
+
+
+def get_agent(reactor):
+    """Return appropriate agent based on whether an http_proxy is used or not.
+
+    :returns: :class:`twisted.web.client.ProxyAgent` when an http_proxy
+        environment variable is present, :class:`twisted.web.client.Agent`
+        otherwise.
+    """
+    http_proxy = os.environ.get('http_proxy')
+    if http_proxy is None:
+        return Agent(reactor)
+
+    parse_result = urlparse(http_proxy)
+    http_proxy_endpoint = TCP4ClientEndpoint(
+        reactor,
+        parse_result.hostname,
+        parse_result.port or 80)
+
+    return ProxyAgent(http_proxy_endpoint)
 
 
 def fetch(url, timeout=DEFAULT_TIMEOUT, method='GET',
