@@ -18,7 +18,7 @@ Here is an example of using Fido::
 
     future = fido.fetch('http://www.yelp.com')
     # Work happens in a background thread...
-    response = future.wait(timeout=2)
+    response = future.result(timeout=2)
     print response.body
 
 Frequently Asked Questions
@@ -41,6 +41,18 @@ Do I need to initialize `Crochet`_?
 -----------------------------------
 
 No, `crochet.setup`_ is automatically invoked by :py:func:`fido.fetch`.
+
+How do I use an http_proxy?
+---------------------------
+
+Just set the http_proxy (all lowercase) environment variable to the URL of
+the http proxy before starting your python process.
+
+Example::
+
+    $ export http_proxy="http://localhost:8000"
+    $ python -c "import fido; print fido.fetch("http://www.yelp.com").result().body
+
 
 API
 ===
