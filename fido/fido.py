@@ -123,6 +123,7 @@ def get_agent(reactor):
         environment variable is present, :class:`twisted.web.client.Agent`
         otherwise.
     """
+    # TODO: Would be nice to have https_proxy support too.
     http_proxy = os.environ.get('http_proxy')
     if http_proxy is None:
         return Agent(reactor)
