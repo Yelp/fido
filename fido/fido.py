@@ -172,7 +172,7 @@ def fetch(url, timeout=DEFAULT_TIMEOUT, method='GET',
     if 'Content-Type' not in headers:
         headers['Content-Type'] = [content_type]
     if 'Content-Length' not in headers and body:
-        headers['Content-Length'] = [len(body)]
+        headers['Content-Length'] = [str(len(body))]
 
     crochet.setup()
     future = concurrent.futures.Future()
