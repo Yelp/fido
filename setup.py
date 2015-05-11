@@ -12,10 +12,7 @@ with open(os.path.join(base_dir, "fido", "__about__.py")) as f:
     exec(f.read(), about)
 
 install_requires = [
-    # TODO: Unpin twisted when https://twistedmatrix.com/trac/ticket/7888 is
-    #       fixed. Specifically, twisted 15.1.0 causes the test_fetch_body
-    #       unit test to fail.
-    'twisted == 15.0.0',
+    'twisted >= 15.0.0',
     'crochet',
     'service_identity',
     'pyOpenSSL',
