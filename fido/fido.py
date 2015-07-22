@@ -71,7 +71,7 @@ class HTTPBodyFetcher(Protocol):
 
 
 @crochet.run_in_reactor
-def fetch_inner(url, method, headers, body, future, timeout):
+def fetch_inner(url, method, headers, body, future, timeout, connect_timeout):
     """This runs inside a separate thread and orchestrates the async IO
     work.
     """
@@ -93,7 +93,7 @@ def fetch_inner(url, method, headers, body, future, timeout):
     if body:
         bodyProducer = FileBodyProducer(StringIO(body))
 
-    deferred = get_agent(reactor).request(
+    deferred = get_agent(reactor, connect_timeout).request(
         method=method,
         uri=url,
         headers=listify_headers(headers),
@@ -116,9 +116,11 @@ def fetch_inner(url, method, headers, body, future, timeout):
     return finished
 
 
-def get_agent(reactor):
+def get_agent(reactor, connect_timeout=None):
     """Return appropriate agent based on whether an http_proxy is used or not.
 
+    :param connect_timeout: connection timeout in seconds
+    :type connect_timeout: float
     :returns: :class:`twisted.web.client.ProxyAgent` when an http_proxy
         environment variable is present, :class:`twisted.web.client.Agent`
         otherwise.
@@ -126,23 +128,26 @@ def get_agent(reactor):
     # TODO: Would be nice to have https_proxy support too.
     http_proxy = os.environ.get('http_proxy')
     if http_proxy is None:
-        return Agent(reactor)
+        return Agent(reactor, connectTimeout=connect_timeout)
 
     parse_result = urlparse(http_proxy)
     http_proxy_endpoint = TCP4ClientEndpoint(
         reactor,
         parse_result.hostname,
-        parse_result.port or 80)
+        parse_result.port or 80,
+        timeout=connect_timeout)
 
     return ProxyAgent(http_proxy_endpoint)
 
 
-def fetch(url, timeout=DEFAULT_TIMEOUT, method='GET',
+def fetch(url, timeout=DEFAULT_TIMEOUT, connect_timeout=None, method='GET',
           content_type=DEFAULT_CONTENT_TYPE, user_agent=DEFAULT_USER_AGENT,
           headers={}, body=''):
     """Make an HTTP request.
 
     :param url: the URL to fetch.
+    :param connect_timeout: maximum time alloweed to establish a connection,
+        in seconds.
     :param timeout: maximum allowed request time, in seconds.
     :param method: the HTTP method.
     :param headers: a dictionary mapping from string keys to lists of string
@@ -177,5 +182,6 @@ def fetch(url, timeout=DEFAULT_TIMEOUT, method='GET',
     crochet.setup()
     future = concurrent.futures.Future()
     if future.set_running_or_notify_cancel():
-        fetch_inner(url, method, headers, body, future, timeout)
+        fetch_inner(url, method, headers, body, future, timeout,
+                    connect_timeout)
     return future
