@@ -68,7 +68,7 @@ def test_unicode_url(mock_future, mock_inner, _):
     mock_inner.assert_called_once_with('\xe7\xb9\x81',
                                        mock.ANY, mock.ANY,
                                        mock.ANY, mock.ANY,
-                                       mock.ANY)
+                                       mock.ANY, mock.ANY)
 
 
 def test_fetch_basic(server_url):
@@ -181,12 +181,14 @@ def test_future_as_completed(server_url):
 
 def test_get_agent_no_http_proxy():
     with mock.patch.dict('os.environ', clear=True):
-        agent = fido.fido.get_agent(mock.Mock())
+        agent = fido.fido.get_agent(mock.Mock(spec=Agent),
+                                    connect_timeout=None)
     assert isinstance(agent, Agent)
 
 
 def test_get_agent_with_http_proxy():
     with mock.patch.dict('os.environ',
                          {'http_proxy': 'http://localhost:8000'}):
-        agent = fido.fido.get_agent(mock.Mock())
+        agent = fido.fido.get_agent(mock.Mock(spec=Agent),
+                                    connect_timeout=None)
     assert isinstance(agent, ProxyAgent)
