@@ -1,4 +1,4 @@
-1.1.4 (2015-XX-XX)
+1.1.4 (2015-07-23)
 ---------------------
 - Add support for connect_timeout
 - Add CHANGELOG
