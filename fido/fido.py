@@ -24,8 +24,6 @@ DEFAULT_USER_AGENT = 'Fido/%s' % __about__.__version__
 
 DEFAULT_CONTENT_TYPE = 'application/json'
 
-DEFAULT_TIMEOUT = 1.0
-
 
 class Response(object):
     """An HTTP response.
@@ -140,7 +138,7 @@ def get_agent(reactor, connect_timeout=None):
     return ProxyAgent(http_proxy_endpoint)
 
 
-def fetch(url, timeout=DEFAULT_TIMEOUT, connect_timeout=None, method='GET',
+def fetch(url, timeout=None, connect_timeout=None, method='GET',
           content_type=DEFAULT_CONTENT_TYPE, user_agent=DEFAULT_USER_AGENT,
           headers={}, body=''):
     """Make an HTTP request.
