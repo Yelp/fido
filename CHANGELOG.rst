@@ -1,3 +1,9 @@
+2.0.0 (2015-XX-XX)
+---------------------
+- Default timeout in fido.fetch(..) has changed from 1s to None (wait indefinitely)
+  This will change the behavior of existing code that doesn't pass in a timeout
+  explicitly.
+
 1.1.4 (2015-07-23)
 ---------------------
 - Add support for connect_timeout
