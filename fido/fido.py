@@ -144,9 +144,10 @@ def fetch(url, timeout=None, connect_timeout=None, method='GET',
     """Make an HTTP request.
 
     :param url: the URL to fetch.
+    :param timeout: maximum allowed request time, in seconds. Defaults to
+        None which means to wait indefinitely.
     :param connect_timeout: maximum time alloweed to establish a connection,
         in seconds.
-    :param timeout: maximum allowed request time, in seconds.
     :param method: the HTTP method.
     :param headers: a dictionary mapping from string keys to lists of string
         values.  For example::

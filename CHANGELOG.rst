@@ -1,6 +1,6 @@
-2.0.0 (2015-XX-XX)
+2.0.0 (2015-07-29)
 ---------------------
-- Default timeout in fido.fetch(..) has changed from 1s to None (wait indefinitely)
+- Default timeout in fido.fetch(..) has changed from 1s to None (wait indefinitely).
   This will change the behavior of existing code that doesn't pass in a timeout
   explicitly.
 
