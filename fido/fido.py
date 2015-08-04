@@ -103,13 +103,14 @@ def fetch_inner(url, method, headers, body, future, timeout, connect_timeout):
     deferred.addCallback(response_callback)
     deferred.addErrback(finished.errback)
 
-    # Cancel the request if we hit the timeout
-    def cancel_timer(response):
-        if timer.active():
-            timer.cancel()
-        return response
-    timer = reactor.callLater(timeout, deferred.cancel)
-    finished.addBoth(cancel_timer)
+    if timeout is not None:
+        # Cancel the request if we hit the timeout
+        def cancel_timer(response):
+            if timer.active():
+                timer.cancel()
+            return response
+        timer = reactor.callLater(timeout, deferred.cancel)
+        finished.addBoth(cancel_timer)
 
     return finished
 
