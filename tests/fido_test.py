@@ -190,3 +190,17 @@ def test_get_agent_with_http_proxy():
         agent = fido.fido.get_agent(mock.Mock(spec=Agent),
                                     connect_timeout=None)
     assert isinstance(agent, ProxyAgent)
+
+
+def test_get_agent_request_error():
+    d = twisted.internet.defer.Deferred()
+    mock_agent = mock.Mock()
+    mock_agent.request.return_value = d
+    with mock.patch('fido.fido.get_agent', return_value=mock_agent):
+        future = fido.fido.fetch('https://localhost:8000')
+
+    d.errback(ValueError('I failed :('))
+    with pytest.raises(ValueError) as e:
+        future.result()
+
+    assert e.value.message == 'I failed :('
