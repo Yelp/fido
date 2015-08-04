@@ -1,3 +1,7 @@
+2.0.1 (2015-XX-XX)
+---------------------
+- Don't schedule a timer cancelation when the timeout is None
+
 2.0.0 (2015-07-29)
 ---------------------
 - Default timeout in fido.fetch(..) has changed from 1s to None (wait indefinitely).
