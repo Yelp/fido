@@ -1,4 +1,4 @@
-2.0.1 (2015-XX-XX)
+2.0.1 (2015-08-04)
 ---------------------
 - Don't schedule a timer cancelation when the timeout is None
 
