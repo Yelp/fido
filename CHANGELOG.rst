@@ -1,3 +1,7 @@
+2.1.0 (2015-XX-XX)
+---------------------
+- Add reason to fido.Response
+
 2.0.1 (2015-08-04)
 ---------------------
 - Don't schedule a timer cancelation when the timeout is None

@@ -32,12 +32,14 @@ class Response(object):
     :ivar headers: a dictionary of response headers, mapping from string keys
         to lists of string values.
     :ivar body: the response body.
+    :ivar reason: the http reason phrase.
     """
 
-    def __init__(self, code, headers, body):
+    def __init__(self, code, headers, body, reason):
         self.headers = dict(headers.getAllRawHeaders())
         self.code = code
         self.body = body
+        self.reason = reason
 
     def json(self):
         """Helper function to load a JSON response body."""
@@ -62,6 +64,7 @@ class HTTPBodyFetcher(Protocol):
                     code=self.response.code,
                     headers=self.response.headers,
                     body=self.buffer.getvalue(),
+                    reason=self.response.phrase,
                 )
             )
         else:
@@ -100,6 +103,7 @@ def fetch_inner(url, method, headers, body, future, timeout, connect_timeout):
     # Fetch the body once we've received the headers
     def response_callback(response):
         response.deliverBody(HTTPBodyFetcher(response, finished))
+
     deferred.addCallback(response_callback)
     deferred.addErrback(finished.errback)
 
