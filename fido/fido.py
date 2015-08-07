@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 from cStringIO import StringIO
@@ -145,13 +144,13 @@ def get_agent(reactor, connect_timeout=None):
 
 def fetch(url, timeout=None, connect_timeout=None, method='GET',
           content_type=DEFAULT_CONTENT_TYPE, user_agent=DEFAULT_USER_AGENT,
-          headers={}, body=''):
+          headers=None, body=''):
     """Make an HTTP request.
 
     :param url: the URL to fetch.
     :param timeout: maximum allowed request time, in seconds. Defaults to
         None which means to wait indefinitely.
-    :param connect_timeout: maximum time alloweed to establish a connection,
+    :param connect_timeout: maximum time allowed to establish a connection,
         in seconds.
     :param method: the HTTP method.
     :param headers: a dictionary mapping from string keys to lists of string
@@ -173,15 +172,13 @@ def fetch(url, timeout=None, connect_timeout=None, method='GET',
         url = url.encode('utf-8')
 
     # Make a copy to avoid mutating the original value
-    headers = dict(headers)
+    headers = dict(headers or {})
 
     # Add basic header values if absent
     if 'User-Agent' not in headers:
         headers['User-Agent'] = [user_agent]
     if 'Content-Type' not in headers:
         headers['Content-Type'] = [content_type]
-    if 'Content-Length' not in headers and body:
-        headers['Content-Length'] = [str(len(body))]
 
     crochet.setup()
     future = concurrent.futures.Future()
