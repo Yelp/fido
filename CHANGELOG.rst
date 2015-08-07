@@ -1,6 +1,6 @@
-2.1.1 (2015-XX-XX)
+2.1.1 (2015-08-07)
 ---------------------
-- Fix duplicate Content-Length request headers. Twisted already takes care of this.
+- Fix duplicate Content-Length request headers when body is not empty. Twisted already takes care of this.
 
 2.1.0 (2015-08-06)
 ---------------------
