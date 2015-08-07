@@ -1,3 +1,7 @@
+2.1.1 (2015-XX-XX)
+---------------------
+- Fix duplicate Content-Length request headers. Twisted already takes care of this.
+
 2.1.0 (2015-08-06)
 ---------------------
 - Add reason to fido.Response
