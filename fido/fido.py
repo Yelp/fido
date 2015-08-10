@@ -70,7 +70,6 @@ class HTTPBodyFetcher(Protocol):
             self.finished.errback(reason)
 
 
-@crochet.run_in_reactor
 def fetch_inner(url, method, headers, body, future, timeout, connect_timeout):
     """This runs inside a separate thread and orchestrates the async IO
     work.
@@ -115,7 +114,7 @@ def fetch_inner(url, method, headers, body, future, timeout, connect_timeout):
         timer = reactor.callLater(timeout, deferred.cancel)
         finished.addBoth(cancel_timer)
 
-    return finished
+    return crochet.EventualResult(finished, crochet._main._reactor)
 
 
 def get_agent(reactor, connect_timeout=None):
