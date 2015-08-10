@@ -1,3 +1,7 @@
+2.1.2 (2015-08-10)
+---------------------
+- Fix issue where errors from a request aren't getting raised.
+
 2.1.1 (2015-08-07)
 ---------------------
 - Fix duplicate Content-Length request headers when body is not empty. Twisted already takes care of this.
