@@ -1,3 +1,7 @@
+2.1.3 (2015-10-05)
+---------------------
+- Add `finish_timestamp` as an attribute of the response
+
 2.1.2 (2015-08-10)
 ---------------------
 - Fix issue where errors from a request aren't getting raised.

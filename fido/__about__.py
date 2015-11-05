@@ -7,7 +7,7 @@ __title__ = "fido"
 __summary__ = "Intelligent asynchronous HTTP client"
 __uri__ = "https://github.com/Yelp/fido"
 
-__version__ = "2.1.2"
+__version__ = "2.1.3"
 
 __author__ = "John Billings"
 __email__ = "billings@yelp.com"

@@ -3,6 +3,7 @@
 from cStringIO import StringIO
 import json
 import os
+import time
 from urlparse import urlparse
 
 import concurrent.futures
@@ -34,11 +35,12 @@ class Response(object):
     :ivar reason: the http reason phrase.
     """
 
-    def __init__(self, code, headers, body, reason):
+    def __init__(self, code, headers, body, reason, finish_timestamp):
         self.headers = dict(headers.getAllRawHeaders())
         self.code = code
         self.body = body
         self.reason = reason
+        self.finish_timestamp = finish_timestamp
 
     def json(self):
         """Helper function to load a JSON response body."""
@@ -58,12 +60,14 @@ class HTTPBodyFetcher(Protocol):
     def connectionLost(self, reason):
         if (reason.check(twisted.web.client.ResponseDone) or
                 reason.check(twisted.web.http.PotentialDataLoss)):
+            finish_timestamp = time.time()
             self.finished.callback(
                 Response(
                     code=self.response.code,
                     headers=self.response.headers,
                     body=self.buffer.getvalue(),
                     reason=self.response.phrase,
+                    finish_timestamp=finish_timestamp,
                 )
             )
         else:
