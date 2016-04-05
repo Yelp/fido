@@ -101,6 +101,39 @@ def test_fetch_headers(server_url):
     assert actual_headers.get('foo') == 'bar'
 
 
+def test_fetch_headers_keep_content_length_if_no_body(server_url):
+    headers = {'Content-Length': '0'}
+    with mock.patch.object(
+        fido.fido,
+        'listify_headers',
+    ) as mock_listify_headers:
+        fido.fetch(server_url, headers=headers)
+    assert 'Content-Length' in mock_listify_headers.call_args[0][0]
+
+
+@pytest.mark.parametrize(
+    'header', ('content-length', 'Content-Length')
+)
+def test_fetch_headers_remove_content_length_if_body(server_url, header):
+    headers = {header: '22'}
+    body = '{"some_json_data": 30}'
+    with mock.patch.object(
+        fido.fido,
+        'listify_headers',
+        autospec=True,
+    ) as mock_listify_headers:
+        fido.fetch(server_url, headers=headers, body=body)
+    assert header not in mock_listify_headers.call_args[0][0]
+
+
+def test_content_length_readded_by_twisted(server_url):
+    headers = {'Content-Length': '22'}
+    body = '{"some_json_data": 30}'
+    future = fido.fetch(server_url, headers=headers, body=body)
+    actual_headers = future.result().json()['headers']
+    assert actual_headers.get('content-length') == '22'
+
+
 def test_fetch_content_type(server_url):
     expected_content_type = 'text/html'
     future = fido.fetch(server_url, content_type=expected_content_type)

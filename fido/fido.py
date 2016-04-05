@@ -91,6 +91,13 @@ def fetch_inner(url, method, headers, body, future, timeout, connect_timeout):
     bodyProducer = None
     if body:
         bodyProducer = FileBodyProducer(StringIO(body))
+        # content-length needs to be removed because it was computed based on
+        # body but body is now being processed by twisted FileBodyProducer
+        # causing content-length to lose meaning and break the client.
+        # FileBodyProducer will take care of re-computing length and re-adding
+        # a new content-length header later.
+        headers.pop('Content-Length', None)
+        headers.pop('content-length', None)
 
     deferred = get_agent(reactor, connect_timeout).request(
         method=method,
