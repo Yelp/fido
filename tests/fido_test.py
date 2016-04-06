@@ -134,6 +134,24 @@ def test_content_length_readded_by_twisted(server_url):
     assert actual_headers.get('content-length') == '22'
 
 
+def test_fetch_inner_headers_not_modified_in_place(server_url):
+    headers = {'foo': 'bar', 'Content-Length': '22'}
+    body = '{"some_json_data": 30}'
+    with mock.patch.object(fido.fido, 'get_agent'):
+        with mock.patch.object(fido.fido, 'crochet'):
+            fido.fido.fetch_inner(
+                server_url,
+                method='GET',
+                headers=headers,
+                body=body,
+                future=mock.Mock(),
+                timeout=None,
+                connect_timeout=None,
+            )
+
+    assert headers == {'foo': 'bar', 'Content-Length': '22'}
+
+
 def test_fetch_content_type(server_url):
     expected_content_type = 'text/html'
     future = fido.fetch(server_url, content_type=expected_content_type)

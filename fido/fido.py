@@ -96,8 +96,11 @@ def fetch_inner(url, method, headers, body, future, timeout, connect_timeout):
         # causing content-length to lose meaning and break the client.
         # FileBodyProducer will take care of re-computing length and re-adding
         # a new content-length header later.
-        headers.pop('Content-Length', None)
-        headers.pop('content-length', None)
+        headers = dict(
+            (key, value)
+            for (key, value) in headers.iteritems()
+            if key != 'Content-Length' and key != 'content-length'
+        )
 
     deferred = get_agent(reactor, connect_timeout).request(
         method=method,
