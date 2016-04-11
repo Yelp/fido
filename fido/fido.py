@@ -99,7 +99,7 @@ def fetch_inner(url, method, headers, body, future, timeout, connect_timeout):
         headers = dict(
             (key, value)
             for (key, value) in headers.iteritems()
-            if key != 'Content-Length' and key != 'content-length'
+            if key.lower() != 'content-length'
         )
 
     deferred = get_agent(reactor, connect_timeout).request(
