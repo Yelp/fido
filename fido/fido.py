@@ -57,6 +57,20 @@ class HTTPBodyFetcher(Protocol):
         self.buffer.write(data)
 
     def connectionLost(self, reason):
+        """
+        :param reason:
+            twisted.web.client.ResponseDone indicates that all bytes from the
+                response have been successfully delivered
+            twisted.web.client.PotentialDataLoss if it cannot be
+                determined if the entire response body has been delivered.
+                This only occurs when making requests to HTTP servers which do
+                not set Content-Length or a Transfer-Encoding in the response
+            twisted.web.client.ResponseFailed indicates that some bytes from
+                the response were lost. The reasons attribute of the exception
+                may provide more specific indications as to why.
+
+        """
+
         if (reason.check(twisted.web.client.ResponseDone) or
                 reason.check(twisted.web.http.PotentialDataLoss)):
             self.finished.callback(
@@ -67,10 +81,53 @@ class HTTPBodyFetcher(Protocol):
                     reason=self.response.phrase,
                 )
             )
-        else:
+        elif reason.check(twisted.web.client.ResponseFailed):
             self.finished.errback(reason)
 
 
+@crochet.run_in_reactor
+def my_fetch_inner(url, method, headers, body, timeout, connect_timeout):
+
+    bodyProducer = None
+    if body:
+        bodyProducer = FileBodyProducer(StringIO(body))
+        # content-length needs to be removed because it was computed based on
+        # body but body is now being processed by twisted FileBodyProducer
+        # causing content-length to lose meaning and break the client.
+        # FileBodyProducer will take care of re-computing length and re-adding
+        # a new content-length header later.
+        headers = dict(
+            (key, value)
+            for (key, value) in headers.iteritems()
+            if key != 'Content-Length' and key != 'content-length'
+        )
+
+    deferred = get_agent(reactor, connect_timeout).request(
+        method=method,
+        uri=url,
+        headers=listify_headers(headers),
+        bodyProducer=bodyProducer)
+
+    # Fetch the body once we've received the headers
+    def response_callback(response):
+        finished = Deferred()
+        response.deliverBody(HTTPBodyFetcher(response, finished))
+        return finished
+
+    # # Set an exception on the future in case of error
+    # def finished_errorback(error):
+        # try:
+            # error.raiseException()
+        # except BaseException as e:
+            # future.set_exception(e)
+    # finished.addErrback(finished_errorback)
+
+    deferred.addCallback(response_callback)
+    # deferred.addErrback(finished_errorback)
+    return deferred
+
+
+# @crochet.run_in_reactor
 def fetch_inner(url, method, headers, body, future, timeout, connect_timeout):
     """This runs inside a separate thread and orchestrates the async IO
     work.
@@ -84,6 +141,7 @@ def fetch_inner(url, method, headers, body, future, timeout, connect_timeout):
             error.raiseException()
         except BaseException as e:
             future.set_exception(e)
+        return error
     finished.addErrback(finished_errorback)
 
     # Set the result on the future in case of success
@@ -114,7 +172,7 @@ def fetch_inner(url, method, headers, body, future, timeout, connect_timeout):
         response.deliverBody(HTTPBodyFetcher(response, finished))
 
     deferred.addCallback(response_callback)
-    deferred.addErrback(finished.errback)
+    deferred.addErrback(finished_errorback)
 
     if timeout is not None:
         # Cancel the request if we hit the timeout
@@ -125,6 +183,7 @@ def fetch_inner(url, method, headers, body, future, timeout, connect_timeout):
         timer = reactor.callLater(timeout, deferred.cancel)
         finished.addBoth(cancel_timer)
 
+    # return finished
     return crochet.EventualResult(finished, crochet._main._reactor)
 
 
@@ -152,9 +211,57 @@ def get_agent(reactor, connect_timeout=None):
     return ProxyAgent(http_proxy_endpoint)
 
 
-def fetch(url, timeout=None, connect_timeout=None, method='GET',
+def my_fetch(url, body='', timeout=None, connect_timeout=None, method='GET',
           content_type=DEFAULT_CONTENT_TYPE, user_agent=DEFAULT_USER_AGENT,
-          headers=None, body=''):
+          headers=None):
+    """Make an HTTP request.
+
+    :param url: the URL to fetch.
+    :param timeout: maximum allowed request time, in seconds. Defaults to
+        None which means to wait indefinitely.
+    :param connect_timeout: maximum time allowed to establish a connection,
+        in seconds.
+    :param method: the HTTP method.
+    :param headers: a dictionary mapping from string keys to lists of string
+        values.  For example::
+
+            {
+                'X-Foo': ['Bar'],
+                'X-Baz': ['Quux'],
+            }
+
+    :param content_type: the content type.
+    :param user_agent: the user agent.
+    :param body: the body of the request.
+
+    :returns: a :py:class:`concurrent.futures.Future` that returns a
+        :py:class:`Response` if the request is successful.
+    """
+    if isinstance(url, unicode):
+        url = url.encode('utf-8')
+
+    # Make a copy to avoid mutating the original value
+    headers = dict(headers or {})
+
+    # Add basic header values if absent
+    if 'User-Agent' not in headers:
+        headers['User-Agent'] = [user_agent]
+    if 'Content-Type' not in headers:
+        headers['Content-Type'] = [content_type]
+
+    crochet.setup()
+    # future = concurrent.futures.Future()
+    # if future.set_running_or_notify_cancel():
+        # fetch_inner(url, method, headers, body, future, timeout,
+                    # connect_timeout)
+    # return future
+
+    return my_fetch_inner(url, method, headers, body, timeout, connect_timeout)
+
+
+def fetch(url, body='', timeout=None, connect_timeout=None, method='GET',
+          content_type=DEFAULT_CONTENT_TYPE, user_agent=DEFAULT_USER_AGENT,
+          headers=None):
     """Make an HTTP request.
 
     :param url: the URL to fetch.
