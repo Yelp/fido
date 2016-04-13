@@ -12,7 +12,7 @@ with open(os.path.join(base_dir, "fido", "__about__.py")) as f:
     exec(f.read(), about)
 
 install_requires = [
-    'twisted >= 15.0.0',
+    'twisted >= 15.0.0, < 15.5.0',  # Python 2.6 support was dropped in 15.5.0
     'crochet',
     'service_identity',
     'pyOpenSSL',

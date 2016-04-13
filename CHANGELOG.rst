@@ -1,3 +1,7 @@
+2.1.3 (2016-04-13)
+---------------------
+- Remove content-length when using FileBodyProducer
+
 2.1.2 (2015-08-10)
 ---------------------
 - Fix issue where errors from a request aren't getting raised.
