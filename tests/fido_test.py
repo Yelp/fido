@@ -5,15 +5,21 @@ import mock
 import threading
 import time
 
-import concurrent.futures
+import crochet
 import pytest
 import twisted.internet.error
 import twisted.internet.defer
 from six.moves import BaseHTTPServer
 from six.moves import socketserver as SocketServer
-from twisted.web.client import Agent, ProxyAgent
+from twisted.web.client import Agent
+from twisted.web.client import FileBodyProducer
+from twisted.web.client import ProxyAgent
 
 import fido
+from fido.fido import _build_body_producer
+from fido.fido import _url_to_utf8
+
+TIMEOUT_TEST = 5.0
 
 
 @pytest.yield_fixture(scope="module")
@@ -56,176 +62,103 @@ def server_url():
     httpd_thread.join()
 
 
-@mock.patch('fido.fido.concurrent.futures.Future')
-@mock.patch('fido.fido.fetch_inner', return_value=None)
-@mock.patch('fido.fido.crochet.setup', return_value=None)
-def test_unicode_url(mock_future, mock_inner, _):
-    mock_future.configure_mock(
-        **{'set_running_or_notify_cancel.return_value': True})
-    fido.fetch(u'繁')
-    mock_inner.assert_called_once_with('\xe7\xb9\x81',
-                                       mock.ANY, mock.ANY,
-                                       mock.ANY, mock.ANY,
-                                       mock.ANY, mock.ANY)
+def test_unicode_url():
+    assert _url_to_utf8(u'繁') == '\xe7\xb9\x81'
 
 
 def test_fetch_basic(server_url):
-    response = fido.fetch(server_url).result()
+    response = fido.fetch(server_url).wait()
     assert 'Content-Type' in response.headers
     assert response.code == 200
     assert response.json()['method'] == 'GET'
 
 
 def test_fetch_timeout(server_url):
-    with pytest.raises(twisted.web._newclient.ResponseNeverReceived):
-        fido.fetch(server_url + 'slow', timeout=0.5).result()
+    with pytest.raises(crochet.TimeoutError):
+        fido.fetch(server_url + 'slow', timeout=0.2).wait(timeout=0.2)
 
 
 def test_fetch_stress(server_url):
-    futures = [fido.fetch(server_url, timeout=8) for _ in range(1000)]
-    for future in concurrent.futures.as_completed(futures):
-        future.result()
+    eventual_results = [
+        fido.fetch(server_url, timeout=8) for _ in range(1000)
+    ]
+    for eventual_result in eventual_results:
+        eventual_result.wait(timeout=10)
 
 
 def test_fetch_method(server_url):
     expected_method = 'POST'
-    future = fido.fetch(server_url, method=expected_method)
-    actual_method = future.result().json()['method']
+    eventual_result = fido.fetch(server_url, method=expected_method)
+    actual_method = eventual_result.wait().json()['method']
     assert expected_method == actual_method
 
 
 def test_fetch_headers(server_url):
     headers = {'foo': ['bar']}
-    future = fido.fetch(server_url, headers=headers)
-    actual_headers = future.result().json()['headers']
+    eventual_result = fido.fetch(server_url, headers=headers)
+    actual_headers = eventual_result.wait().json()['headers']
     assert actual_headers.get('foo') == 'bar'
 
 
-def test_fetch_headers_keep_content_length_if_no_body(server_url):
+def test_headers_keep_content_length_if_no_body(server_url):
     headers = {'Content-Length': '0'}
-    with mock.patch.object(
-        fido.fido,
-        'listify_headers',
-    ) as mock_listify_headers:
-        fido.fetch(server_url, headers=headers)
-    assert 'Content-Length' in mock_listify_headers.call_args[0][0]
+    bodyProducer, headers = _build_body_producer(None, headers)
+    assert bodyProducer is None
+    assert 'Content-Length' in headers
 
 
 @pytest.mark.parametrize(
     'header', ('content-length', 'Content-Length')
 )
-def test_fetch_headers_remove_content_length_if_body(server_url, header):
+def test_headers_remove_content_length_if_body(server_url, header):
     headers = {header: '22'}
     body = '{"some_json_data": 30}'
-    with mock.patch.object(
-        fido.fido,
-        'listify_headers',
-        autospec=True,
-    ) as mock_listify_headers:
-        fido.fetch(server_url, headers=headers, body=body)
-    assert header not in mock_listify_headers.call_args[0][0]
+
+    bodyProducer, headers = _build_body_producer(body, headers)
+    assert isinstance(bodyProducer, FileBodyProducer)
+    assert headers == {}
 
 
 def test_content_length_readded_by_twisted(server_url):
     headers = {'Content-Length': '22'}
     body = '{"some_json_data": 30}'
-    future = fido.fetch(server_url, headers=headers, body=body)
-    actual_headers = future.result().json()['headers']
+    eventual_result = fido.fetch(server_url, headers=headers, body=body)
+    actual_headers = eventual_result.wait().json()['headers']
     assert actual_headers.get('content-length') == '22'
 
 
-def test_fetch_inner_headers_not_modified_in_place(server_url):
+def test_headers_not_modified_in_place(server_url):
     headers = {'foo': 'bar', 'Content-Length': '22'}
     body = '{"some_json_data": 30}'
-    with mock.patch.object(fido.fido, 'get_agent'):
-        with mock.patch.object(fido.fido, 'crochet'):
-            fido.fido.fetch_inner(
-                server_url,
-                method='GET',
-                headers=headers,
-                body=body,
-                future=mock.Mock(),
-                timeout=None,
-                connect_timeout=None,
-            )
+    _, _ = _build_body_producer(body, headers)
 
     assert headers == {'foo': 'bar', 'Content-Length': '22'}
 
 
 def test_fetch_content_type(server_url):
     expected_content_type = 'text/html'
-    future = fido.fetch(server_url, content_type=expected_content_type)
-    actual_content_type = future.result().json()['headers'].get('content-type')
+    eventual_result = fido.fetch(
+        server_url,
+        content_type=expected_content_type
+    )
+    actual_content_type = eventual_result.wait().json()['headers'].\
+        get('content-type')
     assert expected_content_type == actual_content_type
 
 
 def test_fetch_user_agent(server_url):
     expected_user_agent = 'skynet'
-    future = fido.fetch(server_url, user_agent=expected_user_agent)
-    actual_user_agent = future.result().json()['headers'].get('user-agent')
+    eventual_result = fido.fetch(server_url, user_agent=expected_user_agent)
+    actual_user_agent = eventual_result.wait().json()['headers'].\
+        get('user-agent')
     assert expected_user_agent == actual_user_agent
 
 
 def test_fetch_body(server_url):
     expected_body = 'corpus'
-    future = fido.fetch(server_url, body=expected_body)
-    actual_body = future.result().json()['body']
+    eventual_result = fido.fetch(server_url, body=expected_body)
+    actual_body = eventual_result.wait().json()['body']
     assert expected_body == actual_body
-
-
-def test_future_callback(server_url):
-    condition = threading.Condition()
-    done_callback = mock.Mock()
-
-    with condition:
-        future = fido.fetch(server_url)
-        future.add_done_callback(done_callback)
-        condition.wait(1)
-        done_callback.assert_called_once_with(future)
-
-
-def test_future_cancel(server_url):
-    # This is usually a no-op because we cannot cancel requests once they are
-    # being processed, which happens almost instantaneously.
-    future = fido.fetch(server_url)
-    future.cancel()
-
-
-def test_future_done(server_url):
-    future = fido.fetch(server_url)
-    future.result()
-    assert future.done()
-
-
-def test_future_timeout(server_url):
-    with pytest.raises(concurrent.futures.TimeoutError):
-        fido.fetch(server_url + 'slow').result(timeout=0.5)
-
-
-def test_future_connection_refused():
-    with pytest.raises(twisted.internet.error.ConnectionRefusedError):
-        fido.fetch('http://localhost:0').result()
-
-
-def test_future_exception(server_url):
-    future = fido.fetch(server_url + 'slow', timeout=0.5)
-    assert future.exception() is not None
-
-
-def test_future_wait(server_url):
-    futures = [fido.fetch(server_url) for _ in range(10)]
-    done, not_done = concurrent.futures.wait(futures)
-
-    assert len(done) == 10
-    assert len(not_done) == 0
-    for future in done:
-        assert future.done()
-
-
-def test_future_as_completed(server_url):
-    futures = [fido.fetch(server_url) for _ in range(10)]
-    for future in concurrent.futures.as_completed(futures):
-        assert future.done()
 
 
 def test_get_agent_no_http_proxy():
@@ -244,14 +177,56 @@ def test_get_agent_with_http_proxy():
 
 
 def test_get_agent_request_error():
+    """
+    Test exception inside twisted agent in the reactor thread
+    """
     d = twisted.internet.defer.Deferred()
     mock_agent = mock.Mock()
     mock_agent.request.return_value = d
-    with mock.patch('fido.fido.get_agent', return_value=mock_agent):
-        future = fido.fido.fetch('https://localhost:8000')
 
-    d.errback(ValueError('I failed :('))
-    with pytest.raises(ValueError) as e:
-        future.result()
+    # careful while patching get_agent cause it's being accessed
+    # by the reactor thread
+    with mock.patch('fido.fido.get_agent', return_value=mock_agent):
+        eventual_result = fido.fido.fetch('http://some_url')
+        d.errback(ValueError('I failed :('))
+
+        with pytest.raises(ValueError) as e:
+            eventual_result.wait(timeout=TIMEOUT_TEST)
+
+        assert e.value.message == 'I failed :('
+
+
+def test_fetch_inner_throws_exception_in_reactor_thread():
+    """
+    Test exception thrown in the reactor thread
+    """
+
+    # careful while patching _build_body_producer cause it's being accessed
+    # by the reactor thread
+    with mock.patch('fido.fido.get_agent', return_value=mock.Mock()):
+        with mock.patch(
+            'fido.fido._build_body_producer',
+            side_effect=ValueError('I failed :(')
+        ):
+
+            # this should NOT raise! Exception is thrown in the reactor thread
+            # and it is catched and saved inside EventualResult
+            eventual_result = fido.fido.fetch('http://some_url')
+
+            # exception should be thrown here, when waiting for the result
+            with pytest.raises(ValueError) as e:
+                eventual_result.wait(timeout=TIMEOUT_TEST)
+
+            assert e.value.message == 'I failed :('
+
+
+def test_fetch_throws_normal_exception():
+
+    with mock.patch(
+        'fido.fido.crochet.setup',
+        side_effect=ValueError('I failed :(')
+    ):
+        with pytest.raises(ValueError) as e:
+            fido.fido.fetch('http://some_url')
 
     assert e.value.args == ('I failed :(',)

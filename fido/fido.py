@@ -4,7 +4,6 @@ import io
 import json
 import os
 
-import concurrent.futures
 import crochet
 from twisted.internet import reactor
 from twisted.internet.defer import Deferred
@@ -23,6 +22,40 @@ from .common import listify_headers
 DEFAULT_USER_AGENT = 'Fido/%s' % __about__.__version__
 
 DEFAULT_CONTENT_TYPE = 'application/json'
+
+
+def _url_to_utf8(url):
+    """Makes sure the url is utf-8 encoded"""
+
+    if isinstance(url, six.text_type):
+        return url.encode('utf-8')
+    return url
+
+
+def _build_body_producer(body, headers):
+    """
+    Prepares the body and the headers for the twisted http request performed
+    by the Twisted Agent.
+
+    :returns: a Twisted FileBodyProducer object as required by Twisted Agent
+    """
+
+    if not body:
+        return None, headers
+
+    bodyProducer = FileBodyProducer(io.BytesIO(body))
+    # content-length needs to be removed because it was computed based on
+    # body but body is now being processed by twisted FileBodyProducer
+    # causing content-length to lose meaning and break the client.
+    # FileBodyProducer will take care of re-computing length and re-adding
+    # a new content-length header later.
+    headers = dict(
+        (key, value)
+        for (key, value) in six.iteritems(headers)
+        if key != 'Content-Length' and key != 'content-length'
+    )
+
+    return bodyProducer, headers
 
 
 class Response(object):
@@ -86,21 +119,18 @@ class HTTPBodyFetcher(Protocol):
 
 
 @crochet.run_in_reactor
-def my_fetch_inner(url, method, headers, body, timeout, connect_timeout):
+def fetch_inner(url, method, headers, body, timeout, connect_timeout):
+    """
+    This function must be run in the reactor thread because it is calling
+    twisted API which is not thread safe.
+    See https://crochet.readthedocs.org/en/1.4.0/api.html#run-in-reactor-\
+    asynchronous-results for additional information.
 
-    bodyProducer = None
-    if body:
-        bodyProducer = FileBodyProducer(StringIO(body))
-        # content-length needs to be removed because it was computed based on
-        # body but body is now being processed by twisted FileBodyProducer
-        # causing content-length to lose meaning and break the client.
-        # FileBodyProducer will take care of re-computing length and re-adding
-        # a new content-length header later.
-        headers = dict(
-            (key, value)
-            for (key, value) in headers.iteritems()
-            if key != 'Content-Length' and key != 'content-length'
-        )
+    The implementation of this function with regards to how to use the Twisted
+    Agent is following the official book Twisted Network Programming Essentials
+    """
+
+    bodyProducer, headers = _build_body_producer(body, headers)
 
     deferred = get_agent(reactor, connect_timeout).request(
         method=method,
@@ -114,77 +144,8 @@ def my_fetch_inner(url, method, headers, body, timeout, connect_timeout):
         response.deliverBody(HTTPBodyFetcher(response, finished))
         return finished
 
-    # # Set an exception on the future in case of error
-    # def finished_errorback(error):
-        # try:
-            # error.raiseException()
-        # except BaseException as e:
-            # future.set_exception(e)
-    # finished.addErrback(finished_errorback)
-
     deferred.addCallback(response_callback)
-    # deferred.addErrback(finished_errorback)
     return deferred
-
-
-# @crochet.run_in_reactor
-def fetch_inner(url, method, headers, body, future, timeout, connect_timeout):
-    """This runs inside a separate thread and orchestrates the async IO
-    work.
-    """
-
-    finished = Deferred()
-
-    # Set an exception on the future in case of error
-    def finished_errorback(error):
-        try:
-            error.raiseException()
-        except BaseException as e:
-            future.set_exception(e)
-        return error
-    finished.addErrback(finished_errorback)
-
-    # Set the result on the future in case of success
-    finished.addCallback(future.set_result)
-
-    bodyProducer = None
-    if body:
-        bodyProducer = FileBodyProducer(io.BytesIO(body))
-        # content-length needs to be removed because it was computed based on
-        # body but body is now being processed by twisted FileBodyProducer
-        # causing content-length to lose meaning and break the client.
-        # FileBodyProducer will take care of re-computing length and re-adding
-        # a new content-length header later.
-        headers = dict(
-            (key, value)
-            for (key, value) in six.iteritems(headers)
-            if key.lower() != 'content-length'
-        )
-
-    deferred = get_agent(reactor, connect_timeout).request(
-        method=method,
-        uri=url,
-        headers=listify_headers(headers),
-        bodyProducer=bodyProducer)
-
-    # Fetch the body once we've received the headers
-    def response_callback(response):
-        response.deliverBody(HTTPBodyFetcher(response, finished))
-
-    deferred.addCallback(response_callback)
-    deferred.addErrback(finished_errorback)
-
-    if timeout is not None:
-        # Cancel the request if we hit the timeout
-        def cancel_timer(response):
-            if timer.active():
-                timer.cancel()
-            return response
-        timer = reactor.callLater(timeout, deferred.cancel)
-        finished.addBoth(cancel_timer)
-
-    # return finished
-    return crochet.EventualResult(finished, crochet._main._reactor)
 
 
 def get_agent(reactor, connect_timeout=None):
@@ -211,54 +172,6 @@ def get_agent(reactor, connect_timeout=None):
     return ProxyAgent(http_proxy_endpoint)
 
 
-def my_fetch(url, body='', timeout=None, connect_timeout=None, method='GET',
-          content_type=DEFAULT_CONTENT_TYPE, user_agent=DEFAULT_USER_AGENT,
-          headers=None):
-    """Make an HTTP request.
-
-    :param url: the URL to fetch.
-    :param timeout: maximum allowed request time, in seconds. Defaults to
-        None which means to wait indefinitely.
-    :param connect_timeout: maximum time allowed to establish a connection,
-        in seconds.
-    :param method: the HTTP method.
-    :param headers: a dictionary mapping from string keys to lists of string
-        values.  For example::
-
-            {
-                'X-Foo': ['Bar'],
-                'X-Baz': ['Quux'],
-            }
-
-    :param content_type: the content type.
-    :param user_agent: the user agent.
-    :param body: the body of the request.
-
-    :returns: a :py:class:`concurrent.futures.Future` that returns a
-        :py:class:`Response` if the request is successful.
-    """
-    if isinstance(url, unicode):
-        url = url.encode('utf-8')
-
-    # Make a copy to avoid mutating the original value
-    headers = dict(headers or {})
-
-    # Add basic header values if absent
-    if 'User-Agent' not in headers:
-        headers['User-Agent'] = [user_agent]
-    if 'Content-Type' not in headers:
-        headers['Content-Type'] = [content_type]
-
-    crochet.setup()
-    # future = concurrent.futures.Future()
-    # if future.set_running_or_notify_cancel():
-        # fetch_inner(url, method, headers, body, future, timeout,
-                    # connect_timeout)
-    # return future
-
-    return my_fetch_inner(url, method, headers, body, timeout, connect_timeout)
-
-
 def fetch(url, body='', timeout=None, connect_timeout=None, method='GET',
           content_type=DEFAULT_CONTENT_TYPE, user_agent=DEFAULT_USER_AGENT,
           headers=None):
@@ -282,11 +195,14 @@ def fetch(url, body='', timeout=None, connect_timeout=None, method='GET',
     :param user_agent: the user agent.
     :param body: the body of the request.
 
-    :returns: a :py:class:`concurrent.futures.Future` that returns a
-        :py:class:`Response` if the request is successful.
+    :returns: a crochet EventualResult object which behaves as a future,
+        .wait() can be called on it to retrieve the fido.fido.Response object.
+        .wait() throws any exception occurred while performing the request.
+        Eventual additional failures information is stored in the crochet
+        EventualResult object as stated in the official documentation
+
     """
-    if isinstance(url, six.text_type):
-        url = url.encode('utf-8')
+    url = _url_to_utf8(url)
 
     # Make a copy to avoid mutating the original value
     headers = dict(headers or {})
@@ -297,9 +213,6 @@ def fetch(url, body='', timeout=None, connect_timeout=None, method='GET',
     if 'Content-Type' not in headers:
         headers['Content-Type'] = [content_type]
 
+    # initializes twisted reactor in a different thread
     crochet.setup()
-    future = concurrent.futures.Future()
-    if future.set_running_or_notify_cancel():
-        fetch_inner(url, method, headers, body, future, timeout,
-                    connect_timeout)
-    return future
+    return fetch_inner(url, method, headers, body, timeout, connect_timeout)
