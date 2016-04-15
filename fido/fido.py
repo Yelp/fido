@@ -20,8 +20,11 @@ from .common import listify_headers
 
 
 DEFAULT_USER_AGENT = 'Fido/%s' % __about__.__version__
-
 DEFAULT_CONTENT_TYPE = 'application/json'
+
+# infinite timeouts are bad
+DEFAULT_TIMEOUT = 30
+DEFAULT_CONNECT_TIMEOUT = 30
 
 
 def _url_to_utf8(url):
@@ -52,7 +55,7 @@ def _build_body_producer(body, headers):
     headers = dict(
         (key, value)
         for (key, value) in six.iteritems(headers)
-        if key != 'Content-Length' and key != 'content-length'
+        if key.lower() != 'content-length'
     )
 
     return bodyProducer, headers
@@ -114,7 +117,7 @@ class HTTPBodyFetcher(Protocol):
                     reason=self.response.phrase,
                 )
             )
-        elif reason.check(twisted.web.client.ResponseFailed):
+        else:
             self.finished.errback(reason)
 
 
@@ -128,6 +131,16 @@ def fetch_inner(url, method, headers, body, timeout, connect_timeout):
 
     The implementation of this function with regards to how to use the Twisted
     Agent is following the official book Twisted Network Programming Essentials
+
+    :param connect_timeout: maximum time to set up the http connection before
+        aborting. Note that after it is set up, `connect_timeout` loses value.
+        If the server takes forever to send the response and if `timeout` is
+        not provided, we could block forever.
+    :param timeout: maximum time for the server to send a response back before
+        we abort.
+
+    :return: a crochet EventualResult wrapping a
+        twisted.internet.defer.Deferred object
     """
 
     bodyProducer, headers = _build_body_producer(body, headers)
@@ -145,6 +158,39 @@ def fetch_inner(url, method, headers, body, timeout, connect_timeout):
         return finished
 
     deferred.addCallback(response_callback)
+
+    # erroback which handles various types of twisted timeout errors
+    def handle_timeout_errors(error):
+        if error.check(twisted.web.client.ResponseNeverReceived):
+            if error.value.reasons[0].check(
+                twisted.internet.defer.CancelledError
+            ):
+                raise crochet.TimeoutError(
+                    "Connection was closed because the server took more than "
+                    "`connect_timeout` seconds to send the response."
+                )
+
+        elif error.check(twisted.internet.error.TimeoutError):
+            raise crochet.TimeoutError(
+                "Connection was closed by Twisted Agent because the HTTP "
+                "connection took to long to establish."
+            )
+        return error
+
+    deferred.addErrback(handle_timeout_errors)
+
+    # if the timeout is hit, set a timer to cancel the request
+    timer = reactor.callLater(timeout, deferred.cancel)
+
+    # if request is completed on time, cancel the timer
+    def request_completed_on_time(response):
+        if timer.active():
+            timer.cancel()
+        # pass the response through
+        return response
+
+    deferred.addBoth(request_completed_on_time)
+
     return deferred
 
 
@@ -172,9 +218,11 @@ def get_agent(reactor, connect_timeout=None):
     return ProxyAgent(http_proxy_endpoint)
 
 
-def fetch(url, body='', timeout=None, connect_timeout=None, method='GET',
-          content_type=DEFAULT_CONTENT_TYPE, user_agent=DEFAULT_USER_AGENT,
-          headers=None):
+def fetch(
+    url, method='GET', headers=None, body='', timeout=DEFAULT_TIMEOUT,
+    connect_timeout=DEFAULT_CONNECT_TIMEOUT,
+    content_type=DEFAULT_CONTENT_TYPE, user_agent=DEFAULT_USER_AGENT,
+):
     """Make an HTTP request.
 
     :param url: the URL to fetch.

@@ -11,6 +11,7 @@ import twisted.internet.error
 import twisted.internet.defer
 from six.moves import BaseHTTPServer
 from six.moves import socketserver as SocketServer
+import twisted.web.client
 from twisted.web.client import Agent
 from twisted.web.client import FileBodyProducer
 from twisted.web.client import ProxyAgent
@@ -19,7 +20,8 @@ import fido
 from fido.fido import _build_body_producer
 from fido.fido import _url_to_utf8
 
-TIMEOUT_TEST = 5.0
+SERVER_OVERHEAD_TIME = 2.0
+TIMEOUT_TEST = 1.0
 
 
 @pytest.yield_fixture(scope="module")
@@ -32,8 +34,8 @@ def server_url():
 
     class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         def echo(self):
-            if self.path == '/slow':
-                time.sleep(1)
+            if '/slow' in self.path:
+                time.sleep(SERVER_OVERHEAD_TIME)
             self.send_response(200)
             self.send_header("Content-type", "application/json")
             self.end_headers()
@@ -73,9 +75,71 @@ def test_fetch_basic(server_url):
     assert response.json()['method'] == 'GET'
 
 
-def test_fetch_timeout(server_url):
+def test_eventual_result_timeout(server_url):
+    """
+    Testing timeout on result retrieval
+    """
+
+    # fetch without setting timeouts -> we could potentially wait forever
+    eventual_result = fido.fetch(server_url + 'slow')
+
+    # make sure no timeout error is thrown here but only on result retrieval
+    assert eventual_result.original_failure() is None
+
     with pytest.raises(crochet.TimeoutError):
-        fido.fetch(server_url + 'slow', timeout=0.2).wait(timeout=0.2)
+        eventual_result.wait(timeout=TIMEOUT_TEST)
+
+
+def test_agent_timeout(server_url):
+    """
+    Testing that we don't wait forever on the server sending back a response
+    """
+
+    eventual_result = fido.fetch(server_url + 'slow', timeout=TIMEOUT_TEST)
+
+    # wait for fido to estinguish the timeout and abort before test-assertions
+    time.sleep(2 * TIMEOUT_TEST)
+
+    # timeout errors were thrown and handled in the reactor thread.
+    # EventualResult stores them and re-raises on result retrieval
+    assert eventual_result.original_failure() is not None
+
+    with pytest.raises(crochet.TimeoutError) as e:
+        eventual_result.wait()
+
+    assert (
+        "Connection was closed because the server took more than "
+        "`connect_timeout` seconds to send the response."
+        in str(e)
+    )
+
+
+def test_agent_connect_timeout(server_url):
+    """
+    Testing that we don't wait more than connect_timeout to establish a http
+    connection
+    """
+
+    # google drops TCP SYN packets
+    eventual_result = fido.fetch(
+        "http://www.google.com:81",
+        connect_timeout=TIMEOUT_TEST
+    )
+    # wait enough for the connection to be dropped by Twisted Agent
+    time.sleep(2 * TIMEOUT_TEST)
+
+    # timeout errors were thrown and handled in the reactor thread.
+    # EventualResult stores them and re-raises on result retrieval
+    assert eventual_result.original_failure() is not None
+
+    with pytest.raises(crochet.TimeoutError) as e:
+        eventual_result.wait()
+
+    assert (
+        "Connection was closed by Twisted Agent because the HTTP "
+        "connection took to long to establish."
+        in str(e)
+    )
 
 
 def test_fetch_stress(server_url):
@@ -188,9 +252,9 @@ def test_get_agent_request_error():
     # by the reactor thread
     with mock.patch('fido.fido.get_agent', return_value=mock_agent):
         eventual_result = fido.fido.fetch('http://some_url')
-        d.errback(ValueError('I failed :('))
+        d.errback(twisted.web.client.ResponseFailed('I failed :('))
 
-        with pytest.raises(ValueError) as e:
+        with pytest.raises(twisted.web.client.ResponseFailed) as e:
             eventual_result.wait(timeout=TIMEOUT_TEST)
 
         assert e.value.message == 'I failed :('
