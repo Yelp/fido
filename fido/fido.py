@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
-
-from cStringIO import StringIO
+from __future__ import absolute_import
+import io
 import json
 import os
-from urlparse import urlparse
 
 import concurrent.futures
 import crochet
@@ -11,12 +10,14 @@ from twisted.internet import reactor
 from twisted.internet.defer import Deferred
 from twisted.internet.endpoints import TCP4ClientEndpoint
 from twisted.internet.protocol import Protocol
+import six
 import twisted.web.client
+from six.moves.urllib_parse import urlparse
 from twisted.web.client import Agent, ProxyAgent
 from twisted.web.client import FileBodyProducer
 
-import __about__
-from common import listify_headers
+from . import __about__
+from .common import listify_headers
 
 
 DEFAULT_USER_AGENT = 'Fido/%s' % __about__.__version__
@@ -48,7 +49,7 @@ class Response(object):
 class HTTPBodyFetcher(Protocol):
 
     def __init__(self, response, finished):
-        self.buffer = StringIO()
+        self.buffer = io.BytesIO()
         self.response = response
         self.finished = finished
 
@@ -90,7 +91,7 @@ def fetch_inner(url, method, headers, body, future, timeout, connect_timeout):
 
     bodyProducer = None
     if body:
-        bodyProducer = FileBodyProducer(StringIO(body))
+        bodyProducer = FileBodyProducer(io.BytesIO(body))
         # content-length needs to be removed because it was computed based on
         # body but body is now being processed by twisted FileBodyProducer
         # causing content-length to lose meaning and break the client.
@@ -98,7 +99,7 @@ def fetch_inner(url, method, headers, body, future, timeout, connect_timeout):
         # a new content-length header later.
         headers = dict(
             (key, value)
-            for (key, value) in headers.iteritems()
+            for (key, value) in six.iteritems(headers)
             if key.lower() != 'content-length'
         )
 
@@ -177,7 +178,7 @@ def fetch(url, timeout=None, connect_timeout=None, method='GET',
     :returns: a :py:class:`concurrent.futures.Future` that returns a
         :py:class:`Response` if the request is successful.
     """
-    if isinstance(url, unicode):
+    if isinstance(url, six.text_type):
         url = url.encode('utf-8')
 
     # Make a copy to avoid mutating the original value

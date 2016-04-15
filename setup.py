@@ -12,9 +12,9 @@ with open(os.path.join(base_dir, "fido", "__about__.py")) as f:
     exec(f.read(), about)
 
 install_requires = [
-    'twisted >= 15.0.0, < 15.5.0',  # Python 2.6 support was dropped in 15.5.0
     'crochet',
     'service_identity',
+    'six',
     'pyOpenSSL',
 ]
 
@@ -33,5 +33,9 @@ setup(
     author_email=about['__email__'],
     packages=find_packages(exclude=["tests", "tests.*"]),
     install_requires=install_requires,
-    license=about['__license__']
+    extras_require={
+        ':python_version=="2.6"': ['twisted >= 14.0.0, < 15.5'],
+        ':python_version!="2.6"': ['twisted >= 14.0.0'],
+    },
+    license=about['__license__'],
 )
