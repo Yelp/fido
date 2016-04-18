@@ -1,9 +1,7 @@
 # -*- coding: utf-8 -*-
-import BaseHTTPServer
 import json
 import logging
 import mock
-import SocketServer
 import threading
 import time
 
@@ -11,6 +9,8 @@ import concurrent.futures
 import pytest
 import twisted.internet.error
 import twisted.internet.defer
+from six.moves import BaseHTTPServer
+from six.moves import socketserver as SocketServer
 from twisted.web.client import Agent, ProxyAgent
 
 import fido
@@ -82,7 +82,7 @@ def test_fetch_timeout(server_url):
 
 
 def test_fetch_stress(server_url):
-    futures = [fido.fetch(server_url, timeout=8) for _ in xrange(1000)]
+    futures = [fido.fetch(server_url, timeout=8) for _ in range(1000)]
     for future in concurrent.futures.as_completed(futures):
         future.result()
 
@@ -213,7 +213,7 @@ def test_future_exception(server_url):
 
 
 def test_future_wait(server_url):
-    futures = [fido.fetch(server_url) for _ in xrange(10)]
+    futures = [fido.fetch(server_url) for _ in range(10)]
     done, not_done = concurrent.futures.wait(futures)
 
     assert len(done) == 10
@@ -223,7 +223,7 @@ def test_future_wait(server_url):
 
 
 def test_future_as_completed(server_url):
-    futures = [fido.fetch(server_url) for _ in xrange(10)]
+    futures = [fido.fetch(server_url) for _ in range(10)]
     for future in concurrent.futures.as_completed(futures):
         assert future.done()
 
@@ -254,4 +254,4 @@ def test_get_agent_request_error():
     with pytest.raises(ValueError) as e:
         future.result()
 
-    assert e.value.message == 'I failed :('
+    assert e.value.args == ('I failed :(',)

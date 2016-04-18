@@ -1,7 +1,8 @@
 language: python
 
 env:
-  - TOX_ENV=py
+  - TOXENV=py26
+  - TOXENV=py27
 
 install:
   - pip install tox coveralls
