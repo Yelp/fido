@@ -1,3 +1,7 @@
+2.1.4 (2016-04-18)
+---------------------
+- Don't unnecessarily constrain the version of twisted when not using python 2.6.
+
 2.1.3 (2016-04-13)
 ---------------------
 - Remove content-length when using FileBodyProducer
