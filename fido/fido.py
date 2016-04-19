@@ -5,15 +5,12 @@ import json
 import os
 
 import crochet
-from twisted.internet import reactor
 from twisted.internet.defer import Deferred
 from twisted.internet.endpoints import TCP4ClientEndpoint
 from twisted.internet.protocol import Protocol
 import six
 import twisted.web.client
 from six.moves.urllib_parse import urlparse
-from twisted.web.client import Agent, ProxyAgent
-from twisted.web.client import FileBodyProducer
 
 from . import __about__
 from .common import listify_headers
@@ -22,7 +19,7 @@ from .common import listify_headers
 DEFAULT_USER_AGENT = 'Fido/%s' % __about__.__version__
 DEFAULT_CONTENT_TYPE = 'application/json'
 
-# infinite timeouts are bad
+# crochet defaults to infinite timeouts and that could cause hanging forever
 DEFAULT_TIMEOUT = 30
 DEFAULT_CONNECT_TIMEOUT = 30
 
@@ -45,6 +42,8 @@ def _build_body_producer(body, headers):
 
     if not body:
         return None, headers
+
+    from twisted.web.client import FileBodyProducer
 
     bodyProducer = FileBodyProducer(io.BytesIO(body))
     # content-length needs to be removed because it was computed based on
@@ -105,6 +104,8 @@ class HTTPBodyFetcher(Protocol):
                 the response were lost. The reasons attribute of the exception
                 may provide more specific indications as to why.
 
+            For more info see https://twistedmatrix.com/documents/9.0.0/api/\
+                twisted.web.client.Response.html
         """
 
         if (reason.check(twisted.web.client.ResponseDone) or
@@ -131,6 +132,7 @@ def fetch_inner(url, method, headers, body, timeout, connect_timeout):
 
     The implementation of this function with regards to how to use the Twisted
     Agent is following the official book Twisted Network Programming Essentials
+    chapter 'Web Clients', paragraph 'Agent', page 55 - 2nd Edition.
 
     :param connect_timeout: maximum time to set up the http connection before
         aborting. Note that after it is set up, `connect_timeout` loses value.
@@ -142,6 +144,8 @@ def fetch_inner(url, method, headers, body, timeout, connect_timeout):
     :return: a crochet EventualResult wrapping a
         twisted.internet.defer.Deferred object
     """
+
+    from twisted.internet import reactor
 
     bodyProducer, headers = _build_body_producer(body, headers)
 
@@ -161,31 +165,40 @@ def fetch_inner(url, method, headers, body, timeout, connect_timeout):
 
     # erroback which handles various types of twisted timeout errors
     def handle_timeout_errors(error):
+        """
+        This errback handles different types of twisted timeout errors. We
+        could let these errors bubble up but the user's would have to deal with
+        twisted errors without knowing what caused them. From the user's
+        perspective and for sanity of usage is better to raise the friendlier
+        crochet.TimeoutError with an explanation of what happened.
+        """
         if error.check(twisted.web.client.ResponseNeverReceived):
             if error.value.reasons[0].check(
                 twisted.internet.defer.CancelledError
             ):
                 raise crochet.TimeoutError(
-                    "Connection was closed because the server took more than "
-                    "`connect_timeout` seconds to send the response."
+                    "Connection was closed by fido because the server took "
+                    "more than timeout={timeout} seconds to "
+                    "send the response".format(timeout=timeout)
                 )
 
         elif error.check(twisted.internet.error.TimeoutError):
             raise crochet.TimeoutError(
                 "Connection was closed by Twisted Agent because the HTTP "
-                "connection took to long to establish."
+                "connection took more than connect_timeout={connect_timeout} "
+                "seconds to establish.".format(connect_timeout=connect_timeout)
             )
         return error
 
     deferred.addErrback(handle_timeout_errors)
 
     # if the timeout is hit, set a timer to cancel the request
-    timer = reactor.callLater(timeout, deferred.cancel)
+    cancel_deferred_timer = reactor.callLater(timeout, deferred.cancel)
 
     # if request is completed on time, cancel the timer
     def request_completed_on_time(response):
-        if timer.active():
-            timer.cancel()
+        if cancel_deferred_timer.active():
+            cancel_deferred_timer.cancel()
         # pass the response through
         return response
 
@@ -203,9 +216,11 @@ def get_agent(reactor, connect_timeout=None):
         environment variable is present, :class:`twisted.web.client.Agent`
         otherwise.
     """
+
     # TODO: Would be nice to have https_proxy support too.
     http_proxy = os.environ.get('http_proxy')
     if http_proxy is None:
+        from twisted.web.client import Agent
         return Agent(reactor, connectTimeout=connect_timeout)
 
     parse_result = urlparse(http_proxy)
@@ -215,19 +230,26 @@ def get_agent(reactor, connect_timeout=None):
         parse_result.port or 80,
         timeout=connect_timeout)
 
+    from twisted.web.client import ProxyAgent
+
     return ProxyAgent(http_proxy_endpoint)
 
 
 def fetch(
-    url, method='GET', headers=None, body='', timeout=DEFAULT_TIMEOUT,
+    url,
+    method='GET',
+    headers=None,
+    body='',
+    timeout=DEFAULT_TIMEOUT,
     connect_timeout=DEFAULT_CONNECT_TIMEOUT,
-    content_type=DEFAULT_CONTENT_TYPE, user_agent=DEFAULT_USER_AGENT,
+    content_type=DEFAULT_CONTENT_TYPE,
+    user_agent=DEFAULT_USER_AGENT,
 ):
-    """Make an HTTP request.
+    """
+    Make an HTTP request.
 
     :param url: the URL to fetch.
-    :param timeout: maximum allowed request time, in seconds. Defaults to
-        None which means to wait indefinitely.
+    :param timeout: maximum allowed request time, in seconds.
     :param connect_timeout: maximum time allowed to establish a connection,
         in seconds.
     :param method: the HTTP method.
@@ -250,6 +272,7 @@ def fetch(
         EventualResult object as stated in the official documentation
 
     """
+
     url = _url_to_utf8(url)
 
     # Make a copy to avoid mutating the original value

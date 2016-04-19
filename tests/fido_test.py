@@ -23,6 +23,8 @@ from fido.fido import _url_to_utf8
 SERVER_OVERHEAD_TIME = 2.0
 TIMEOUT_TEST = 1.0
 
+ERROR_MESSAGE = 'I failed :('
+
 
 @pytest.yield_fixture(scope="module")
 def server_url():
@@ -89,6 +91,8 @@ def test_eventual_result_timeout(server_url):
     with pytest.raises(crochet.TimeoutError):
         eventual_result.wait(timeout=TIMEOUT_TEST)
 
+    assert eventual_result.original_failure() is None
+
 
 def test_agent_timeout(server_url):
     """
@@ -108,8 +112,9 @@ def test_agent_timeout(server_url):
         eventual_result.wait()
 
     assert (
-        "Connection was closed because the server took more than "
-        "`connect_timeout` seconds to send the response."
+        "Connection was closed by fido because the server took "
+        "more than timeout={timeout} seconds to "
+        "send the response".format(timeout=TIMEOUT_TEST)
         in str(e)
     )
 
@@ -137,7 +142,8 @@ def test_agent_connect_timeout(server_url):
 
     assert (
         "Connection was closed by Twisted Agent because the HTTP "
-        "connection took to long to establish."
+        "connection took more than connect_timeout={connect_timeout} seconds "
+        "to establish.".format(connect_timeout=TIMEOUT_TEST)
         in str(e)
     )
 
@@ -252,12 +258,12 @@ def test_get_agent_request_error():
     # by the reactor thread
     with mock.patch('fido.fido.get_agent', return_value=mock_agent):
         eventual_result = fido.fido.fetch('http://some_url')
-        d.errback(twisted.web.client.ResponseFailed('I failed :('))
+        d.errback(twisted.web.client.ResponseFailed(ERROR_MESSAGE))
 
         with pytest.raises(twisted.web.client.ResponseFailed) as e:
             eventual_result.wait(timeout=TIMEOUT_TEST)
 
-        assert e.value.message == 'I failed :('
+        assert e.value.message == ERROR_MESSAGE
 
 
 def test_fetch_inner_throws_exception_in_reactor_thread():
@@ -270,7 +276,7 @@ def test_fetch_inner_throws_exception_in_reactor_thread():
     with mock.patch('fido.fido.get_agent', return_value=mock.Mock()):
         with mock.patch(
             'fido.fido._build_body_producer',
-            side_effect=ValueError('I failed :(')
+            side_effect=ValueError(ERROR_MESSAGE)
         ):
 
             # this should NOT raise! Exception is thrown in the reactor thread
@@ -281,16 +287,16 @@ def test_fetch_inner_throws_exception_in_reactor_thread():
             with pytest.raises(ValueError) as e:
                 eventual_result.wait(timeout=TIMEOUT_TEST)
 
-            assert e.value.message == 'I failed :('
+            assert e.value.message == ERROR_MESSAGE
 
 
 def test_fetch_throws_normal_exception():
 
     with mock.patch(
         'fido.fido.crochet.setup',
-        side_effect=ValueError('I failed :(')
+        side_effect=ValueError(ERROR_MESSAGE)
     ):
         with pytest.raises(ValueError) as e:
             fido.fido.fetch('http://some_url')
 
-    assert e.value.args == ('I failed :(',)
+    assert e.value.args == (ERROR_MESSAGE,)
