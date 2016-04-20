@@ -5,9 +5,13 @@ import json
 import os
 
 import crochet
+from twisted.internet import reactor
 from twisted.internet.defer import Deferred
 from twisted.internet.endpoints import TCP4ClientEndpoint
 from twisted.internet.protocol import Protocol
+from twisted.web.client import Agent
+from twisted.web.client import ProxyAgent
+from twisted.web.client import FileBodyProducer
 import six
 import twisted.web.client
 from six.moves.urllib_parse import urlparse
@@ -19,7 +23,7 @@ from .common import listify_headers
 DEFAULT_USER_AGENT = 'Fido/%s' % __about__.__version__
 DEFAULT_CONTENT_TYPE = 'application/json'
 
-# crochet defaults to infinite timeouts and that could cause hanging forever
+# Sane finite defaults to prevent crochet infinite timeouts
 DEFAULT_TIMEOUT = 30
 DEFAULT_CONNECT_TIMEOUT = 30
 
@@ -42,8 +46,6 @@ def _build_body_producer(body, headers):
 
     if not body:
         return None, headers
-
-    from twisted.web.client import FileBodyProducer
 
     bodyProducer = FileBodyProducer(io.BytesIO(body))
     # content-length needs to be removed because it was computed based on
@@ -145,8 +147,6 @@ def fetch_inner(url, method, headers, body, timeout, connect_timeout):
         twisted.internet.defer.Deferred object
     """
 
-    from twisted.internet import reactor
-
     bodyProducer, headers = _build_body_producer(body, headers)
 
     deferred = get_agent(reactor, connect_timeout).request(
@@ -155,15 +155,14 @@ def fetch_inner(url, method, headers, body, timeout, connect_timeout):
         headers=listify_headers(headers),
         bodyProducer=bodyProducer)
 
-    # Fetch the body once we've received the headers
     def response_callback(response):
+        """Fetch the body once we've received the headers"""
         finished = Deferred()
         response.deliverBody(HTTPBodyFetcher(response, finished))
         return finished
 
     deferred.addCallback(response_callback)
 
-    # erroback which handles various types of twisted timeout errors
     def handle_timeout_errors(error):
         """
         This errback handles different types of twisted timeout errors. We
@@ -192,14 +191,13 @@ def fetch_inner(url, method, headers, body, timeout, connect_timeout):
 
     deferred.addErrback(handle_timeout_errors)
 
-    # if the timeout is hit, set a timer to cancel the request
+    # set a timer to cancel the deferred request when/if the timeout is hit
     cancel_deferred_timer = reactor.callLater(timeout, deferred.cancel)
 
     # if request is completed on time, cancel the timer
     def request_completed_on_time(response):
         if cancel_deferred_timer.active():
             cancel_deferred_timer.cancel()
-        # pass the response through
         return response
 
     deferred.addBoth(request_completed_on_time)
@@ -220,7 +218,6 @@ def get_agent(reactor, connect_timeout=None):
     # TODO: Would be nice to have https_proxy support too.
     http_proxy = os.environ.get('http_proxy')
     if http_proxy is None:
-        from twisted.web.client import Agent
         return Agent(reactor, connectTimeout=connect_timeout)
 
     parse_result = urlparse(http_proxy)
@@ -229,8 +226,6 @@ def get_agent(reactor, connect_timeout=None):
         parse_result.hostname,
         parse_result.port or 80,
         timeout=connect_timeout)
-
-    from twisted.web.client import ProxyAgent
 
     return ProxyAgent(http_proxy_endpoint)
 
