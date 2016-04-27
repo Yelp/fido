@@ -13,7 +13,7 @@ Fido
 Introduction
 ============
 
-Fido is a simple, asynchronous HTTP client built on top of Crochet_, Twisted_ and `concurrent.futures`_.  It is intended to be used in environments
+Fido is a simple, asynchronous HTTP client built on top of Crochet_ and Twisted_ with an implementation inspired by the book_ "Twisted Network Programming Essentials".  It is intended to be used in environments
 where there is no event loop, and where you cannot afford to spin up lots of threads (otherwise you could just use a `ThreadPoolExecutor`_).
 
 Here is an example of using Fido::
@@ -75,4 +75,5 @@ Apache v2
 .. _ThreadPoolExecutor: http://pythonhosted.org/futures/#threadpoolexecutor-objects
 .. _pyOpenSSL: https://github.com/pyca/pyopenssl
 .. _service_identity: https://github.com/pyca/service_identity
+.. _book: http://dl.acm.org/citation.cfm?id=1205685
 
