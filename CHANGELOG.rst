@@ -1,3 +1,12 @@
+3.0.0 (2016-04-27)
+---------------------
+- Fido twisted client redesigned by the book (Twisted Network Programming Essentials).
+- Fix CRITICAL :: twisted - Unhandled error in Deferred.
+- Fix use of crochet library handling the reactor thread (@run_in_reactor and EventualResult).
+- Drop concurrent.futures in favor of crochet EventualResult.
+- Improved handling of timeout errors and exceptions in reactor thread.
+- Increased test coverage and documentation.
+
 2.1.4 (2016-04-18)
 ---------------------
 - Don't unnecessarily constrain the version of twisted when not using python 2.6.
