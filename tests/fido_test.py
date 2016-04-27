@@ -18,6 +18,7 @@ from twisted.web.client import ProxyAgent
 
 import fido
 from fido.fido import _build_body_producer
+from fido.fido import _set_deferred_timeout
 from fido.fido import _url_to_utf8
 
 SERVER_OVERHEAD_TIME = 2.0
@@ -75,6 +76,28 @@ def test_fetch_basic(server_url):
     assert 'Content-Type' in response.headers
     assert response.code == 200
     assert response.json()['method'] == 'GET'
+
+
+def test_set_deferred_timeout_none():
+    mock_reactor = mock.Mock()
+    mock_deferred = mock.Mock()
+    _set_deferred_timeout(mock_reactor, mock_deferred, None)
+
+    assert mock_reactor.callLater.called is False
+    assert mock_deferred.addBoth.called is False
+
+
+def test_set_deferred_timeout_finite_value():
+    mock_reactor = mock.Mock()
+    mock_deferred = mock.Mock()
+
+    _set_deferred_timeout(mock_reactor, mock_deferred, TIMEOUT_TEST)
+
+    mock_reactor.callLater.assert_called_once_with(
+        TIMEOUT_TEST, mock_deferred.cancel
+    )
+
+    assert mock_deferred.addBoth.called is True
 
 
 def test_eventual_result_timeout(server_url):
@@ -246,9 +269,10 @@ def test_get_agent_with_http_proxy():
     assert isinstance(agent, ProxyAgent)
 
 
-def test_get_agent_request_error():
+def test_deferred_errback_chain():
     """
-    Test exception inside twisted agent in the reactor thread
+    Test exception thrown on the deferred correctly triggers the errback chain
+    and it is thrown by EventualResult on result retrieval.
     """
     d = twisted.internet.defer.Deferred()
     mock_agent = mock.Mock()
@@ -258,6 +282,8 @@ def test_get_agent_request_error():
     # by the reactor thread
     with mock.patch('fido.fido.get_agent', return_value=mock_agent):
         eventual_result = fido.fido.fetch('http://some_url')
+
+        # trigger an exception on the deferred
         d.errback(twisted.web.client.ResponseFailed(ERROR_MESSAGE))
 
         with pytest.raises(twisted.web.client.ResponseFailed) as e:
@@ -266,14 +292,15 @@ def test_get_agent_request_error():
         assert e.value.message == ERROR_MESSAGE
 
 
-def test_fetch_inner_throws_exception_in_reactor_thread():
+def test_fetch_inner_exception_thrown_in_reactor_thread():
     """
-    Test exception thrown in the reactor thread
+    Test that an exception thrown in the reactor thread is trapped inside
+    the EventualResult and thrown on result retrieval.
     """
 
     # careful while patching _build_body_producer cause it's being accessed
     # by the reactor thread
-    with mock.patch('fido.fido.get_agent', return_value=mock.Mock()):
+    with mock.patch('fido.fido.get_agent'):
         with mock.patch(
             'fido.fido._build_body_producer',
             side_effect=ValueError(ERROR_MESSAGE)
@@ -290,7 +317,10 @@ def test_fetch_inner_throws_exception_in_reactor_thread():
             assert e.value.message == ERROR_MESSAGE
 
 
-def test_fetch_throws_normal_exception():
+def test_fetch_normally_throws_exception():
+    """
+    Testing an exception in the main thread of execution is normally thrown.
+    """
 
     with mock.patch(
         'fido.fido.crochet.setup',

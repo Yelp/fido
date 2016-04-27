@@ -23,9 +23,11 @@ from .common import listify_headers
 DEFAULT_USER_AGENT = 'Fido/%s' % __about__.__version__
 DEFAULT_CONTENT_TYPE = 'application/json'
 
-# Sane finite defaults to prevent crochet infinite timeouts
-DEFAULT_TIMEOUT = 30
-DEFAULT_CONNECT_TIMEOUT = 30
+# Timeouts default to None which means block indefinitely according to the
+# principle of least surprise. Famous examples following this pattern are:
+# Requests, concurrent.futures, python socket stdlib
+DEFAULT_TIMEOUT = None
+DEFAULT_CONNECT_TIMEOUT = None
 
 
 def _url_to_utf8(url):
@@ -124,6 +126,29 @@ class HTTPBodyFetcher(Protocol):
             self.finished.errback(reason)
 
 
+def _set_deferred_timeout(reactor, deferred, timeout):
+    """
+    Sets a maximum timeout on the deferred object. The deferred will be
+    cancelled after 'timeout' seconds. This timeout represents the maximum
+    allowed time for Fido to wait for the server response after the connection
+    has been established by the Twisted Agent.
+    """
+
+    if timeout is None:
+        return
+
+    # set a timer to cancel the deferred request when/if the timeout is hit
+    cancel_deferred_timer = reactor.callLater(timeout, deferred.cancel)
+
+    # if request is completed on time, cancel the timer
+    def request_completed_on_time(response):
+        if cancel_deferred_timer.active():
+            cancel_deferred_timer.cancel()
+        return response
+
+    deferred.addBoth(request_completed_on_time)
+
+
 @crochet.run_in_reactor
 def fetch_inner(url, method, headers, body, timeout, connect_timeout):
     """
@@ -153,7 +178,8 @@ def fetch_inner(url, method, headers, body, timeout, connect_timeout):
         method=method,
         uri=url,
         headers=listify_headers(headers),
-        bodyProducer=bodyProducer)
+        bodyProducer=bodyProducer
+    )
 
     def response_callback(response):
         """Fetch the body once we've received the headers"""
@@ -166,7 +192,7 @@ def fetch_inner(url, method, headers, body, timeout, connect_timeout):
     def handle_timeout_errors(error):
         """
         This errback handles different types of twisted timeout errors. We
-        could let these errors bubble up but the user's would have to deal with
+        could let these errors bubble up but the user would have to deal with
         twisted errors without knowing what caused them. From the user's
         perspective and for sanity of usage is better to raise the friendlier
         crochet.TimeoutError with an explanation of what happened.
@@ -191,16 +217,8 @@ def fetch_inner(url, method, headers, body, timeout, connect_timeout):
 
     deferred.addErrback(handle_timeout_errors)
 
-    # set a timer to cancel the deferred request when/if the timeout is hit
-    cancel_deferred_timer = reactor.callLater(timeout, deferred.cancel)
-
-    # if request is completed on time, cancel the timer
-    def request_completed_on_time(response):
-        if cancel_deferred_timer.active():
-            cancel_deferred_timer.cancel()
-        return response
-
-    deferred.addBoth(request_completed_on_time)
+    # sets timeout if it is not None
+    _set_deferred_timeout(reactor, deferred, timeout)
 
     return deferred
 
@@ -244,8 +262,8 @@ def fetch(
     Make an HTTP request.
 
     :param url: the URL to fetch.
-    :param timeout: maximum allowed request time, in seconds.
-    :param connect_timeout: maximum time allowed to establish a connection,
+    :param timeout: maximum allowed request time in seconds.
+    :param connect_timeout: maximum time allowed to establish a connection
         in seconds.
     :param method: the HTTP method.
     :param headers: a dictionary mapping from string keys to lists of string
