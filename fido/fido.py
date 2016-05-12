@@ -21,7 +21,6 @@ from .common import listify_headers
 
 
 DEFAULT_USER_AGENT = 'Fido/%s' % __about__.__version__
-DEFAULT_CONTENT_TYPE = 'application/json'
 
 # Timeouts default to None which means block indefinitely according to the
 # principle of least surprise. Famous examples following this pattern are:
@@ -55,13 +54,13 @@ def _build_body_producer(body, headers):
     # causing content-length to lose meaning and break the client.
     # FileBodyProducer will take care of re-computing length and re-adding
     # a new content-length header later.
-    headers = dict(
+    twisted_headers = dict(
         (key, value)
         for (key, value) in six.iteritems(headers)
         if key.lower() != 'content-length'
     )
 
-    return bodyProducer, headers
+    return bodyProducer, twisted_headers
 
 
 class Response(object):
@@ -172,12 +171,12 @@ def fetch_inner(url, method, headers, body, timeout, connect_timeout):
         twisted.internet.defer.Deferred object
     """
 
-    bodyProducer, headers = _build_body_producer(body, headers)
+    bodyProducer, twisted_headers = _build_body_producer(body, headers)
 
     deferred = get_agent(reactor, connect_timeout).request(
         method=method,
         uri=url,
-        headers=listify_headers(headers),
+        headers=listify_headers(twisted_headers),
         bodyProducer=bodyProducer
     )
 
@@ -255,7 +254,6 @@ def fetch(
     body='',
     timeout=DEFAULT_TIMEOUT,
     connect_timeout=DEFAULT_CONNECT_TIMEOUT,
-    content_type=DEFAULT_CONTENT_TYPE,
     user_agent=DEFAULT_USER_AGENT,
 ):
     """
@@ -294,8 +292,6 @@ def fetch(
     # Add basic header values if absent
     if 'User-Agent' not in headers:
         headers['User-Agent'] = [user_agent]
-    if 'Content-Type' not in headers:
-        headers['Content-Type'] = [content_type]
 
     # initializes twisted reactor in a different thread
     crochet.setup()

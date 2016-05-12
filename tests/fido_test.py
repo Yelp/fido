@@ -232,7 +232,7 @@ def test_fetch_content_type(server_url):
     expected_content_type = 'text/html'
     eventual_result = fido.fetch(
         server_url,
-        content_type=expected_content_type
+        headers={'Content-Type': expected_content_type}
     )
     actual_content_type = eventual_result.wait().json()['headers'].\
         get('content-type')
