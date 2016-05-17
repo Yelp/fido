@@ -1,3 +1,7 @@
+3.1.0 (2016-05-13)
+---------------------
+- Don't send content-type='application/json' by default anymore.
+
 3.0.0 (2016-04-27)
 ---------------------
 - Fido twisted client redesigned by the book (Twisted Network Programming Essentials).
