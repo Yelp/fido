@@ -18,6 +18,7 @@ from six.moves.urllib_parse import urlparse
 
 from . import __about__
 from .common import listify_headers
+from .common import encode_to_bytes
 
 
 DEFAULT_USER_AGENT = 'Fido/%s' % __about__.__version__
@@ -27,14 +28,6 @@ DEFAULT_USER_AGENT = 'Fido/%s' % __about__.__version__
 # Requests, concurrent.futures, python socket stdlib
 DEFAULT_TIMEOUT = None
 DEFAULT_CONNECT_TIMEOUT = None
-
-
-def _url_to_utf8(url):
-    """Makes sure the url is utf-8 encoded"""
-
-    if isinstance(url, six.text_type):
-        return url.encode('utf-8')
-    return url
 
 
 def _build_body_producer(body, headers):
@@ -48,7 +41,7 @@ def _build_body_producer(body, headers):
     if not body:
         return None, headers
 
-    bodyProducer = FileBodyProducer(io.BytesIO(body))
+    bodyProducer = FileBodyProducer(io.BytesIO(encode_to_bytes(body)))
     # content-length needs to be removed because it was computed based on
     # body but body is now being processed by twisted FileBodyProducer
     # causing content-length to lose meaning and break the client.
@@ -74,14 +67,30 @@ class Response(object):
     """
 
     def __init__(self, code, headers, body, reason):
-        self.headers = dict(headers.getAllRawHeaders())
-        self.code = code
-        self.body = body
-        self.reason = reason
+        self._headers = dict(headers.getAllRawHeaders())
+        self._code = code
+        self._body = body
+        self._reason = reason
+
+    @property
+    def headers(self):
+        return self._headers
+
+    @property
+    def code(self):
+        return self._code
+
+    @property
+    def body(self):
+        return self._body
+
+    @property
+    def reason(self):
+        return self._reason
 
     def json(self):
         """Helper function to load a JSON response body."""
-        return json.loads(self.body)
+        return json.loads(self._body.decode('utf-8'))
 
 
 class HTTPBodyFetcher(Protocol):
@@ -127,6 +136,9 @@ class HTTPBodyFetcher(Protocol):
 
 def _set_deferred_timeout(reactor, deferred, timeout):
     """
+    NOTE: Make sure to call this only from the reactor thread as it is
+    accessing twisted API.
+
     Sets a maximum timeout on the deferred object. The deferred will be
     cancelled after 'timeout' seconds. This timeout represents the maximum
     allowed time for Fido to wait for the server response after the connection
@@ -196,6 +208,7 @@ def fetch_inner(url, method, headers, body, timeout, connect_timeout):
         perspective and for sanity of usage is better to raise the friendlier
         crochet.TimeoutError with an explanation of what happened.
         """
+
         if error.check(twisted.web.client.ResponseNeverReceived):
             if error.value.reasons[0].check(
                 twisted.internet.defer.CancelledError
@@ -254,7 +267,6 @@ def fetch(
     body='',
     timeout=DEFAULT_TIMEOUT,
     connect_timeout=DEFAULT_CONNECT_TIMEOUT,
-    user_agent=DEFAULT_USER_AGENT,
 ):
     """
     Make an HTTP request.
@@ -273,7 +285,6 @@ def fetch(
             }
 
     :param content_type: the content type.
-    :param user_agent: the user agent.
     :param body: the body of the request.
 
     :returns: a crochet EventualResult object which behaves as a future,
@@ -284,14 +295,14 @@ def fetch(
 
     """
 
-    url = _url_to_utf8(url)
+    url = encode_to_bytes(url)
+    method = encode_to_bytes(method)
 
     # Make a copy to avoid mutating the original value
     headers = dict(headers or {})
 
-    # Add basic header values if absent
-    if 'User-Agent' not in headers:
-        headers['User-Agent'] = [user_agent]
+    if 'User-Agent' not in headers and 'user-agent' not in headers:
+        headers['User-Agent'] = [DEFAULT_USER_AGENT]
 
     # initializes twisted reactor in a different thread
     crochet.setup()
