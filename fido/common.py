@@ -1,13 +1,6 @@
 import six
 from twisted.web.http_headers import Headers
-
-
-def encode_to_bytes(value):
-    """Twisted requires the method, url, headers to be utf-8 encoded"""
-
-    if isinstance(value, six.text_type):
-        return value.encode('utf-8')
-    return value
+from yelp_bytes import to_bytes
 
 
 def listify_headers(headers):
@@ -15,7 +8,7 @@ def listify_headers(headers):
 
     for key, val in six.iteritems(headers):
         if not isinstance(val, list):
-            headers[key] = [encode_to_bytes(val)]
+            headers[key] = [to_bytes(val)]
         else:
-            headers[key] = [encode_to_bytes(val[0])]
+            headers[key] = [to_bytes(x) for x in val]
     return Headers(headers)

@@ -5,6 +5,9 @@ import json
 import os
 
 import crochet
+import six
+import twisted.web.client
+from six.moves.urllib_parse import urlparse
 from twisted.internet import reactor
 from twisted.internet.defer import Deferred
 from twisted.internet.endpoints import TCP4ClientEndpoint
@@ -12,13 +15,10 @@ from twisted.internet.protocol import Protocol
 from twisted.web.client import Agent
 from twisted.web.client import ProxyAgent
 from twisted.web.client import FileBodyProducer
-import six
-import twisted.web.client
-from six.moves.urllib_parse import urlparse
+from yelp_bytes import to_bytes
 
 from . import __about__
 from .common import listify_headers
-from .common import encode_to_bytes
 
 
 DEFAULT_USER_AGENT = 'Fido/%s' % __about__.__version__
@@ -35,13 +35,17 @@ def _build_body_producer(body, headers):
     Prepares the body and the headers for the twisted http request performed
     by the Twisted Agent.
 
+    :param body: request body, MUST be of type bytes.
+
     :returns: a Twisted FileBodyProducer object as required by Twisted Agent
     """
 
     if not body:
         return None, headers
 
-    bodyProducer = FileBodyProducer(io.BytesIO(encode_to_bytes(body)))
+    # body must be of bytes type.
+    bodyProducer = FileBodyProducer(io.BytesIO(body))
+
     # content-length needs to be removed because it was computed based on
     # body but body is now being processed by twisted FileBodyProducer
     # causing content-length to lose meaning and break the client.
@@ -67,30 +71,14 @@ class Response(object):
     """
 
     def __init__(self, code, headers, body, reason):
-        self._headers = dict(headers.getAllRawHeaders())
-        self._code = code
-        self._body = body
-        self._reason = reason
-
-    @property
-    def headers(self):
-        return self._headers
-
-    @property
-    def code(self):
-        return self._code
-
-    @property
-    def body(self):
-        return self._body
-
-    @property
-    def reason(self):
-        return self._reason
+        self.headers = dict(headers.getAllRawHeaders())
+        self.code = code
+        self.body = body
+        self.reason = reason
 
     def json(self):
         """Helper function to load a JSON response body."""
-        return json.loads(self._body.decode('utf-8'))
+        return json.loads(self.body.decode('utf-8'))
 
 
 class HTTPBodyFetcher(Protocol):
@@ -272,9 +260,6 @@ def fetch(
     Make an HTTP request.
 
     :param url: the URL to fetch.
-    :param timeout: maximum allowed request time in seconds.
-    :param connect_timeout: maximum time allowed to establish a connection
-        in seconds.
     :param method: the HTTP method.
     :param headers: a dictionary mapping from string keys to lists of string
         values.  For example::
@@ -283,9 +268,10 @@ def fetch(
                 'X-Foo': ['Bar'],
                 'X-Baz': ['Quux'],
             }
-
-    :param content_type: the content type.
-    :param body: the body of the request.
+    :param body: the request body (must be of bytes type).
+    :param timeout: maximum allowed request time in seconds.
+    :param connect_timeout: maximum time allowed to establish a connection
+        in seconds.
 
     :returns: a crochet EventualResult object which behaves as a future,
         .wait() can be called on it to retrieve the fido.fido.Response object.
@@ -295,13 +281,14 @@ def fetch(
 
     """
 
-    url = encode_to_bytes(url)
-    method = encode_to_bytes(method)
+    """Twisted requires the method, url, headers to be utf-8 encoded"""
+    url = to_bytes(url)
+    method = to_bytes(method)
 
     # Make a copy to avoid mutating the original value
     headers = dict(headers or {})
 
-    if 'User-Agent' not in headers and 'user-agent' not in headers:
+    if not any(header.lower() == 'user-agent' for header in headers):
         headers['User-Agent'] = [DEFAULT_USER_AGENT]
 
     # initializes twisted reactor in a different thread

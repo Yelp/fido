@@ -14,11 +14,12 @@ import twisted.web.client
 from twisted.web.client import Agent
 from twisted.web.client import FileBodyProducer
 from twisted.web.client import ProxyAgent
+from yelp_bytes import to_bytes
 
 import fido
-from fido.common import encode_to_bytes
 from fido.fido import _build_body_producer
 from fido.fido import _set_deferred_timeout
+from fido.fido import DEFAULT_USER_AGENT
 
 SERVER_OVERHEAD_TIME = 2.0
 TIMEOUT_TEST = 1.0
@@ -54,7 +55,7 @@ def server_url():
             """Send back the content-length number as the response."""
             self.send_response(200)
 
-            response = encode_to_bytes(self.headers.get('Content-Length'))
+            response = to_bytes(self.headers.get('Content-Length'))
             content_length = len(response)
             self.send_header('Content-Length', content_length)
             self.end_headers()
@@ -85,7 +86,8 @@ def server_url():
 
 def test_fetch_basic(server_url):
     response = fido.fetch(server_url + ECHO_URL).wait()
-    assert response.headers.get(b'User-Agent') == [b'Fido/3.1.0']
+    assert response.headers.get(b'User-Agent') == \
+        [to_bytes(DEFAULT_USER_AGENT)]
     assert response.reason == b'OK'
     assert response.code == 200
 
@@ -213,7 +215,7 @@ def test_headers_keep_content_length_if_no_body():
 )
 def test_headers_remove_content_length_if_body(header):
     headers = {header: '22'}
-    body = '{"some_json_data": 30}'
+    body = b'{"some_json_data": 30}'
 
     bodyProducer, headers = _build_body_producer(body, headers)
     assert isinstance(bodyProducer, FileBodyProducer)
@@ -221,7 +223,7 @@ def test_headers_remove_content_length_if_body(header):
 
 
 def test_json_body(server_url):
-    body = '{"some_json_data": 30}'
+    body = b'{"some_json_data": 30}'
     eventual_result = fido.fetch(
         server_url + ECHO_URL,
         method='POST',
@@ -231,8 +233,8 @@ def test_json_body(server_url):
 
 
 def test_content_length_readded_by_twisted(server_url):
-    headers = {'Content-Length': '22'}
-    body = '{"some_json_data": 30}'
+    headers = {'Content-Length': '250'}
+    body = b'{"some_json_data": 30}'
     eventual_result = fido.fetch(
         server_url + '/content_length',
         method='POST',
@@ -245,7 +247,7 @@ def test_content_length_readded_by_twisted(server_url):
 
 def test_headers_not_modified_in_place():
     headers = {'foo': 'bar', 'Content-Length': '22'}
-    body = '{"some_json_data": 30}'
+    body = b'{"some_json_data": 30}'
     _, _ = _build_body_producer(body, headers)
 
     assert headers == {'foo': 'bar', 'Content-Length': '22'}
