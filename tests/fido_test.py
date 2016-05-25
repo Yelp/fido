@@ -190,7 +190,7 @@ def test_agent_connect_timeout():
 
 def test_fetch_stress(server_url):
     eventual_results = [
-        fido.fetch(server_url + ECHO_URL, timeout=8) for _ in range(1000)
+        fido.fetch(server_url + ECHO_URL, timeout=10) for _ in range(1000)
     ]
     for eventual_result in eventual_results:
         eventual_result.wait(timeout=10)
