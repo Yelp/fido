@@ -281,7 +281,7 @@ def fetch(
 
     """
 
-    """Twisted requires the method, url, headers to be utf-8 encoded"""
+    # Twisted requires the method, url, headers to be bytes
     url = to_bytes(url)
     method = to_bytes(method)
 
