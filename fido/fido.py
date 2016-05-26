@@ -5,6 +5,9 @@ import json
 import os
 
 import crochet
+import six
+import twisted.web.client
+from six.moves.urllib_parse import urlparse
 from twisted.internet import reactor
 from twisted.internet.defer import Deferred
 from twisted.internet.endpoints import TCP4ClientEndpoint
@@ -12,9 +15,7 @@ from twisted.internet.protocol import Protocol
 from twisted.web.client import Agent
 from twisted.web.client import ProxyAgent
 from twisted.web.client import FileBodyProducer
-import six
-import twisted.web.client
-from six.moves.urllib_parse import urlparse
+from yelp_bytes import to_bytes
 
 from . import __about__
 from .common import listify_headers
@@ -29,18 +30,12 @@ DEFAULT_TIMEOUT = None
 DEFAULT_CONNECT_TIMEOUT = None
 
 
-def _url_to_utf8(url):
-    """Makes sure the url is utf-8 encoded"""
-
-    if isinstance(url, six.text_type):
-        return url.encode('utf-8')
-    return url
-
-
 def _build_body_producer(body, headers):
     """
     Prepares the body and the headers for the twisted http request performed
     by the Twisted Agent.
+
+    :param body: request body, MUST be of type bytes.
 
     :returns: a Twisted FileBodyProducer object as required by Twisted Agent
     """
@@ -48,7 +43,9 @@ def _build_body_producer(body, headers):
     if not body:
         return None, headers
 
+    # body must be of bytes type.
     bodyProducer = FileBodyProducer(io.BytesIO(body))
+
     # content-length needs to be removed because it was computed based on
     # body but body is now being processed by twisted FileBodyProducer
     # causing content-length to lose meaning and break the client.
@@ -81,7 +78,7 @@ class Response(object):
 
     def json(self):
         """Helper function to load a JSON response body."""
-        return json.loads(self.body)
+        return json.loads(self.body.decode('utf-8'))
 
 
 class HTTPBodyFetcher(Protocol):
@@ -127,6 +124,9 @@ class HTTPBodyFetcher(Protocol):
 
 def _set_deferred_timeout(reactor, deferred, timeout):
     """
+    NOTE: Make sure to call this only from the reactor thread as it is
+    accessing twisted API.
+
     Sets a maximum timeout on the deferred object. The deferred will be
     cancelled after 'timeout' seconds. This timeout represents the maximum
     allowed time for Fido to wait for the server response after the connection
@@ -196,6 +196,7 @@ def fetch_inner(url, method, headers, body, timeout, connect_timeout):
         perspective and for sanity of usage is better to raise the friendlier
         crochet.TimeoutError with an explanation of what happened.
         """
+
         if error.check(twisted.web.client.ResponseNeverReceived):
             if error.value.reasons[0].check(
                 twisted.internet.defer.CancelledError
@@ -254,15 +255,11 @@ def fetch(
     body='',
     timeout=DEFAULT_TIMEOUT,
     connect_timeout=DEFAULT_CONNECT_TIMEOUT,
-    user_agent=DEFAULT_USER_AGENT,
 ):
     """
     Make an HTTP request.
 
     :param url: the URL to fetch.
-    :param timeout: maximum allowed request time in seconds.
-    :param connect_timeout: maximum time allowed to establish a connection
-        in seconds.
     :param method: the HTTP method.
     :param headers: a dictionary mapping from string keys to lists of string
         values.  For example::
@@ -271,10 +268,10 @@ def fetch(
                 'X-Foo': ['Bar'],
                 'X-Baz': ['Quux'],
             }
-
-    :param content_type: the content type.
-    :param user_agent: the user agent.
-    :param body: the body of the request.
+    :param body: the request body (must be of bytes type).
+    :param timeout: maximum allowed request time in seconds.
+    :param connect_timeout: maximum time allowed to establish a connection
+        in seconds.
 
     :returns: a crochet EventualResult object which behaves as a future,
         .wait() can be called on it to retrieve the fido.fido.Response object.
@@ -284,14 +281,15 @@ def fetch(
 
     """
 
-    url = _url_to_utf8(url)
+    # Twisted requires the method, url, headers to be bytes
+    url = to_bytes(url)
+    method = to_bytes(method)
 
     # Make a copy to avoid mutating the original value
     headers = dict(headers or {})
 
-    # Add basic header values if absent
-    if 'User-Agent' not in headers:
-        headers['User-Agent'] = [user_agent]
+    if not any(header.lower() == 'user-agent' for header in headers):
+        headers['User-Agent'] = [DEFAULT_USER_AGENT]
 
     # initializes twisted reactor in a different thread
     crochet.setup()

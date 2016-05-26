@@ -1,3 +1,9 @@
+3.2.0 (2016-05-20)
+---------------------
+- Fido is python 3 ready.
+- Bytes are required for body now.
+- User agent must be passed as any other header to fetch()
+
 3.1.0 (2016-05-13)
 ---------------------
 - Don't send content-type='application/json' by default anymore.
