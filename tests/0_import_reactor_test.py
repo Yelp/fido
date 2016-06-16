@@ -1,7 +1,14 @@
 # -*- coding: utf-8 -*-
+"""
+Why this file start with 0?
+This test file should be run as first because it tests that twisted reactor
+is not initialized at fido import time. Since some other tests later will
+explicitly import reactor (initializing it), we must run this file as first.
+"""
 import sys
 
 import psutil
+import subprocess
 
 
 class TestTwistedReactorNotInitImportTime(object):
@@ -9,33 +16,37 @@ class TestTwistedReactorNotInitImportTime(object):
     This class is trying to test that fido is (and stays) fork-safe.
     """
 
-    @classmethod
-    def setup_class(cls):
-        cls.current_process = psutil.Process()
-        # get the number of file descriptors open before the test class is run
-        cls.pre_import_num_fds = cls.current_process.num_fds()
-
-    @classmethod
-    def _no_new_fds_open_after_swaggerpy_bravado_import(cls):
+    @staticmethod
+    def count_pipes():
         """
-        This test only checks for symptoms that something went wrong. If
-        twisted.reactor was initialized in any of the previous tests then the
-        number of file descriptors for the current process should be higher.
-        It seems that reactor opens up 3 file descriptors.
+        This helper runs lsof for the current process and counts how many pipes
+        are open. When twisted reactor is initialized, at least a new pipe is
+        created for the eventpoll.
         """
+        pipes = 0
 
-        post_import_num_fds = cls.current_process.num_fds()
-        return cls.pre_import_num_fds >= post_import_num_fds - 2
+        pid = psutil.Process().pid
+        lsof_output = subprocess.check_output(['lsof', '-p', str(pid)])
+        lsof_lines = lsof_output.strip().split('\n')
+        for line in lsof_lines:
+            if 'PIPE' in line:
+                pipes = pipes + 1
+
+        return pipes
 
     def test_twisted_reactor_not_imported_after_fetch_import(self):
         """
-        Test that reactor is not imported (and initialized) as a result of
-        importing fido modules and methods.
+        Test that:
+        - reactor is not imported (and initialized) as a result of
+            importing fido modules and methods.
+        - no new pipes are created (eventpoll would create a new pipe)
         """
 
         assert 'twisted.internet.reactor' not in sys.modules
+        pipes_before = self.count_pipes()
 
         import fido
         from fido.fido import fetch
 
         assert 'twisted.internet.reactor' not in sys.modules
+        assert self.count_pipes() == pipes_before
