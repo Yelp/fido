@@ -8,7 +8,8 @@ explicitly import reactor (initializing it), we must run this file as first.
 import sys
 
 import psutil
-import subprocess
+from subprocess import PIPE
+from subprocess import Popen
 
 
 class TestTwistedReactorNotInitImportTime(object):
@@ -26,8 +27,9 @@ class TestTwistedReactorNotInitImportTime(object):
         pipes = 0
 
         pid = psutil.Process().pid
-        lsof_output = subprocess.check_output(['lsof', '-p', str(pid)])
-        lsof_lines = lsof_output.strip().split('\n')
+        subproc = Popen(['lsof', '-p', str(pid)], stdout=PIPE)
+        lsof_lines = subproc.communicate()[0].decode().split('\n')
+
         for line in lsof_lines:
             if 'PIPE' in line:
                 pipes = pipes + 1
@@ -45,8 +47,8 @@ class TestTwistedReactorNotInitImportTime(object):
         assert 'twisted.internet.reactor' not in sys.modules
         pipes_before = self.count_pipes()
 
-        import fido
-        from fido.fido import fetch
+        import fido  # noqa
+        from fido.fido import fetch  # noqa
 
         assert 'twisted.internet.reactor' not in sys.modules
         assert self.count_pipes() == pipes_before
