@@ -5,16 +5,17 @@ This test file should be run as first because it tests that twisted reactor
 is not initialized at fido import time. Since some other tests later will
 explicitly import reactor (initializing it), we must run this file as first.
 """
+import psutil
 import sys
 
-import psutil
 from subprocess import PIPE
 from subprocess import Popen
 
 
 class TestTwistedReactorNotInitImportTime(object):
     """
-    This class is trying to test that fido is (and stays) fork-safe.
+    This class is trying to test that fido is (and stays) daemonization-safe.
+    Fido is still not fork safe and forking is discouraged.
     """
 
     @staticmethod
