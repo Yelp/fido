@@ -6,19 +6,15 @@ import time
 
 import crochet
 import pytest
-import twisted.internet.error
-import twisted.internet.defer
 from six.moves import BaseHTTPServer
 from six.moves import socketserver as SocketServer
-import twisted.web.client
-from twisted.web.client import Agent
-from twisted.web.client import FileBodyProducer
-from twisted.web.client import ProxyAgent
+from twisted.internet.defer import Deferred
 from yelp_bytes import to_bytes
 
 import fido
 from fido.fido import _build_body_producer
 from fido.fido import _set_deferred_timeout
+from fido.fido import _twisted_web_client
 from fido.fido import DEFAULT_USER_AGENT
 
 SERVER_OVERHEAD_TIME = 2.0
@@ -218,7 +214,7 @@ def test_headers_remove_content_length_if_body(header):
     body = b'{"some_json_data": 30}'
 
     bodyProducer, headers = _build_body_producer(body, headers)
-    assert isinstance(bodyProducer, FileBodyProducer)
+    assert isinstance(bodyProducer, _twisted_web_client().FileBodyProducer)
     assert headers == {}
 
 
@@ -290,17 +286,19 @@ def test_fetch_body(server_url):
 
 def test_get_agent_no_http_proxy():
     with mock.patch.dict('os.environ', clear=True):
-        agent = fido.fido.get_agent(mock.Mock(spec=Agent),
-                                    connect_timeout=None)
-    assert isinstance(agent, Agent)
+        agent = fido.fido.get_agent(
+            mock.Mock(spec=_twisted_web_client().Agent),
+            connect_timeout=None)
+    assert isinstance(agent, _twisted_web_client().Agent)
 
 
 def test_get_agent_with_http_proxy():
     with mock.patch.dict('os.environ',
                          {'http_proxy': 'http://localhost:8000'}):
-        agent = fido.fido.get_agent(mock.Mock(spec=Agent),
-                                    connect_timeout=None)
-    assert isinstance(agent, ProxyAgent)
+        agent = fido.fido.get_agent(
+            mock.Mock(spec=_twisted_web_client().Agent),
+            connect_timeout=None)
+    assert isinstance(agent, _twisted_web_client().ProxyAgent)
 
 
 def test_deferred_errback_chain():
@@ -308,7 +306,7 @@ def test_deferred_errback_chain():
     Test exception thrown on the deferred correctly triggers the errback chain
     and it is thrown by EventualResult on result retrieval.
     """
-    d = twisted.internet.defer.Deferred()
+    d = Deferred()
     mock_agent = mock.Mock()
     mock_agent.request.return_value = d
 
@@ -318,9 +316,9 @@ def test_deferred_errback_chain():
         eventual_result = fido.fido.fetch('http://some_url')
 
         # trigger an exception on the deferred
-        d.errback(twisted.web.client.ResponseFailed(ERROR_MESSAGE))
+        d.errback(_twisted_web_client().ResponseFailed(ERROR_MESSAGE))
 
-        with pytest.raises(twisted.web.client.ResponseFailed) as e:
+        with pytest.raises(_twisted_web_client().ResponseFailed) as e:
             eventual_result.wait(timeout=TIMEOUT_TEST)
 
         assert e.value.args == (ERROR_MESSAGE,)

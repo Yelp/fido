@@ -6,19 +6,35 @@ import os
 
 import crochet
 import six
-import twisted.web.client
 from six.moves.urllib_parse import urlparse
-from twisted.internet import reactor
+from twisted.internet.defer import CancelledError
 from twisted.internet.defer import Deferred
 from twisted.internet.endpoints import TCP4ClientEndpoint
+from twisted.internet.error import TimeoutError as TwistedTimeoutError
 from twisted.internet.protocol import Protocol
-from twisted.web.client import Agent
-from twisted.web.client import ProxyAgent
-from twisted.web.client import FileBodyProducer
 from yelp_bytes import to_bytes
 
 from . import __about__
 from .common import listify_headers
+
+
+##############################################################################
+# Twisted reactor is initialized at import time but this is problematic
+# in the context of daemonization.
+# Reactor initializes a couple of file descriptors (i.e. a pipe for eventpoll).
+# If the fds are closed after the process daemonizes this could cause problems
+# ('Bad File Descriptor' exceptions).
+##############################################################################
+
+
+def _import_reactor():
+    from twisted.internet import reactor
+    return reactor
+
+
+def _twisted_web_client():
+    from twisted.web import client
+    return client
 
 
 DEFAULT_USER_AGENT = 'Fido/%s' % __about__.__version__
@@ -44,7 +60,7 @@ def _build_body_producer(body, headers):
         return None, headers
 
     # body must be of bytes type.
-    bodyProducer = FileBodyProducer(io.BytesIO(body))
+    bodyProducer = _twisted_web_client().FileBodyProducer(io.BytesIO(body))
 
     # content-length needs to be removed because it was computed based on
     # body but body is now being processed by twisted FileBodyProducer
@@ -108,8 +124,8 @@ class HTTPBodyFetcher(Protocol):
                 twisted.web.client.Response.html
         """
 
-        if (reason.check(twisted.web.client.ResponseDone) or
-                reason.check(twisted.web.http.PotentialDataLoss)):
+        if (reason.check(_twisted_web_client().ResponseDone) or
+                reason.check(_twisted_web_client().PotentialDataLoss)):
             self.finished.callback(
                 Response(
                     code=self.response.code,
@@ -172,6 +188,7 @@ def fetch_inner(url, method, headers, body, timeout, connect_timeout):
     """
 
     bodyProducer, twisted_headers = _build_body_producer(body, headers)
+    reactor = _import_reactor()
 
     deferred = get_agent(reactor, connect_timeout).request(
         method=method,
@@ -197,17 +214,15 @@ def fetch_inner(url, method, headers, body, timeout, connect_timeout):
         crochet.TimeoutError with an explanation of what happened.
         """
 
-        if error.check(twisted.web.client.ResponseNeverReceived):
-            if error.value.reasons[0].check(
-                twisted.internet.defer.CancelledError
-            ):
+        if error.check(_twisted_web_client().ResponseNeverReceived):
+            if error.value.reasons[0].check(CancelledError):
                 raise crochet.TimeoutError(
                     "Connection was closed by fido because the server took "
                     "more than timeout={timeout} seconds to "
                     "send the response".format(timeout=timeout)
                 )
 
-        elif error.check(twisted.internet.error.TimeoutError):
+        elif error.check(TwistedTimeoutError):
             raise crochet.TimeoutError(
                 "Connection was closed by Twisted Agent because the HTTP "
                 "connection took more than connect_timeout={connect_timeout} "
@@ -236,7 +251,9 @@ def get_agent(reactor, connect_timeout=None):
     # TODO: Would be nice to have https_proxy support too.
     http_proxy = os.environ.get('http_proxy')
     if http_proxy is None:
-        return Agent(reactor, connectTimeout=connect_timeout)
+        return _twisted_web_client().Agent(
+            reactor,
+            connectTimeout=connect_timeout)
 
     parse_result = urlparse(http_proxy)
     http_proxy_endpoint = TCP4ClientEndpoint(
@@ -245,7 +262,7 @@ def get_agent(reactor, connect_timeout=None):
         parse_result.port or 80,
         timeout=connect_timeout)
 
-    return ProxyAgent(http_proxy_endpoint)
+    return _twisted_web_client().ProxyAgent(http_proxy_endpoint)
 
 
 def fetch(

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import six
 from twisted.web.http_headers import Headers
 from yelp_bytes import to_bytes

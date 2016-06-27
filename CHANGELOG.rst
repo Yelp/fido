@@ -1,3 +1,7 @@
+3.2.1 (2016-06-16)
+---------------------
+- Fido is daemonization-safe with a solution similar to the one on crochet (reactor is not initialized at fido import time, see https://github.com/itamarst/crochet/issues/45). Forking is still discouraged.
+
 3.2.0 (2016-05-20)
 ---------------------
 - Fido is python 3 ready.
