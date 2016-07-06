@@ -10,7 +10,7 @@ from six.moves.urllib_parse import urlparse
 from twisted.internet.defer import CancelledError
 from twisted.internet.defer import Deferred
 from twisted.internet.endpoints import TCP4ClientEndpoint
-from twisted.internet.error import TimeoutError as TwistedTimeoutError
+from twisted.internet.error import ConnectError as TwistedConnectError
 from twisted.internet.protocol import Protocol
 from yelp_bytes import to_bytes
 
@@ -223,7 +223,7 @@ def fetch_inner(url, method, headers, body, timeout, connect_timeout):
                     "send the response".format(timeout=timeout)
                 )
 
-        elif error.check(TwistedTimeoutError):
+        elif error.check(TwistedConnectError):
             raise ConnectTimeoutError(
                 "Connection was closed by Twisted Agent because the HTTP "
                 "connection took more than connect_timeout={connect_timeout} "
