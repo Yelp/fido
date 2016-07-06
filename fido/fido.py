@@ -16,6 +16,8 @@ from yelp_bytes import to_bytes
 
 from . import __about__
 from .common import listify_headers
+from fido.exceptions import ConnectTimeoutError
+from fido.exceptions import HTTPTimeoutError
 
 
 ##############################################################################
@@ -25,7 +27,6 @@ from .common import listify_headers
 # If the fds are closed after the process daemonizes this could cause problems
 # ('Bad File Descriptor' exceptions).
 ##############################################################################
-
 
 def _import_reactor():
     from twisted.internet import reactor
@@ -216,14 +217,14 @@ def fetch_inner(url, method, headers, body, timeout, connect_timeout):
 
         if error.check(_twisted_web_client().ResponseNeverReceived):
             if error.value.reasons[0].check(CancelledError):
-                raise crochet.TimeoutError(
+                raise HTTPTimeoutError(
                     "Connection was closed by fido because the server took "
                     "more than timeout={timeout} seconds to "
                     "send the response".format(timeout=timeout)
                 )
 
         elif error.check(TwistedTimeoutError):
-            raise crochet.TimeoutError(
+            raise ConnectTimeoutError(
                 "Connection was closed by Twisted Agent because the HTTP "
                 "connection took more than connect_timeout={connect_timeout} "
                 "seconds to establish.".format(connect_timeout=connect_timeout)
