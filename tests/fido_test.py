@@ -16,7 +16,7 @@ from fido.fido import _build_body_producer
 from fido.fido import _set_deferred_timeout
 from fido.fido import _twisted_web_client
 from fido.fido import DEFAULT_USER_AGENT
-from fido.exceptions import ConnectTimeoutError
+from fido.exceptions import TCPConnectError
 from fido.exceptions import HTTPTimeoutError
 
 SERVER_OVERHEAD_TIME = 2.0
@@ -175,7 +175,7 @@ def test_agent_connect_timeout():
     # EventualResult stores them and re-raises on result retrieval
     assert eventual_result.original_failure() is not None
 
-    with pytest.raises(ConnectTimeoutError) as e:
+    with pytest.raises(TCPConnectError) as e:
         eventual_result.wait()
 
     assert (

@@ -7,7 +7,6 @@ import os
 import crochet
 import six
 from six.moves.urllib_parse import urlparse
-from twisted.internet.defer import CancelledError
 from twisted.internet.defer import Deferred
 from twisted.internet.endpoints import TCP4ClientEndpoint
 from twisted.internet.error import ConnectError as TwistedConnectError
@@ -16,7 +15,7 @@ from yelp_bytes import to_bytes
 
 from . import __about__
 from .common import listify_headers
-from fido.exceptions import ConnectTimeoutError
+from fido.exceptions import TCPConnectError
 from fido.exceptions import HTTPTimeoutError
 
 
@@ -216,15 +215,14 @@ def fetch_inner(url, method, headers, body, timeout, connect_timeout):
         """
 
         if error.check(_twisted_web_client().ResponseNeverReceived):
-            if error.value.reasons[0].check(CancelledError):
-                raise HTTPTimeoutError(
-                    "Connection was closed by fido because the server took "
-                    "more than timeout={timeout} seconds to "
-                    "send the response".format(timeout=timeout)
-                )
+            raise HTTPTimeoutError(
+                "Connection was closed by fido because the server took "
+                "more than timeout={timeout} seconds to "
+                "send the response".format(timeout=timeout)
+            )
 
         elif error.check(TwistedConnectError):
-            raise ConnectTimeoutError(
+            raise TCPConnectError(
                 "Connection was closed by Twisted Agent because the HTTP "
                 "connection took more than connect_timeout={connect_timeout} "
                 "seconds to establish.".format(connect_timeout=connect_timeout)

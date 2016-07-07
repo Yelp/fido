@@ -1,19 +1,22 @@
 # -*- coding: utf-8 -*-
 
 
-class BaseTimeoutError(Exception):
+class ConnectionError(Exception):
     """
-    Base class for all errors due to timeouts.
-    """
-
-
-class ConnectTimeoutError(BaseTimeoutError):
-    """
-    Connection took too long to establish
+    Base class for all errors due to connection problems (connection failing
+    for any reason, including timeout reasons).
     """
 
 
-class HTTPTimeoutError(BaseTimeoutError):
+class TCPConnectError(ConnectionError):
     """
-    Server took too long to send the response.
+    A connection error occurred for some reasons.
+    A common reason is the connection took too long to establish.
+    """
+
+
+class HTTPTimeoutError(ConnectionError):
+    """
+    HTTP response was never received.
+    A common reason is the server took too long to respond.
     """
