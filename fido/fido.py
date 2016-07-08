@@ -9,13 +9,13 @@ import six
 from six.moves.urllib_parse import urlparse
 from twisted.internet.defer import Deferred
 from twisted.internet.endpoints import TCP4ClientEndpoint
-from twisted.internet.error import ConnectError as TwistedConnectError
+from twisted.internet.error import ConnectError
 from twisted.internet.protocol import Protocol
 from yelp_bytes import to_bytes
 
 from . import __about__
 from .common import listify_headers
-from fido.exceptions import TCPConnectError
+from fido.exceptions import TCPConnectionError
 from fido.exceptions import HTTPTimeoutError
 
 
@@ -207,11 +207,12 @@ def fetch_inner(url, method, headers, body, timeout, connect_timeout):
 
     def handle_timeout_errors(error):
         """
-        This errback handles different types of twisted timeout errors. We
-        could let these errors bubble up but the user would have to deal with
-        twisted errors without knowing what caused them. From the user's
-        perspective and for sanity of usage is better to raise the friendlier
-        crochet.TimeoutError with an explanation of what happened.
+        This errback handles twisted timeout errors and wraps them as fido
+        exceptions so that users don't need to import twisted APIs (reactor
+        initialization issues) and dig into Twisted documentation and code.
+
+        From the user's perspective and for sanity of usage is better to raise
+        the friendlier fido.exception errors.
         """
 
         if error.check(_twisted_web_client().ResponseNeverReceived):
@@ -221,11 +222,12 @@ def fetch_inner(url, method, headers, body, timeout, connect_timeout):
                 "send the response".format(timeout=timeout)
             )
 
-        elif error.check(TwistedConnectError):
-            raise TCPConnectError(
-                "Connection was closed by Twisted Agent because the HTTP "
-                "connection took more than connect_timeout={connect_timeout} "
-                "seconds to establish.".format(connect_timeout=connect_timeout)
+        elif error.check(ConnectError):
+            raise TCPConnectionError(
+                "Connection was closed by Twisted Agent because there was "
+                "a problem establishing the connection or the "
+                "connect_timeout={connect_timeout} was reached."
+                .format(connect_timeout=connect_timeout)
             )
         return error
 
