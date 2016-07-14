@@ -5,7 +5,7 @@ This test file should be run as first because it tests that twisted reactor
 is not initialized at fido import time. Since some other tests later will
 explicitly import reactor (initializing it), we must run this file as first.
 """
-import psutil
+import os
 import sys
 
 from subprocess import PIPE
@@ -27,7 +27,7 @@ class TestTwistedReactorNotInitImportTime(object):
         """
         pipes = 0
 
-        pid = psutil.Process().pid
+        pid = os.getpid()
         subproc = Popen(['lsof', '-p', str(pid)], stdout=PIPE)
         lsof_lines = subproc.communicate()[0].decode().split('\n')
 
