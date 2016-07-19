@@ -1,3 +1,7 @@
+4.0.1 (2016-07-18)
+---------------------
+- Throw HTTPTimeoutError only if it was caused by CancelledError (bugfix).
+
 4.0.0 (2016-07-08)
 ---------------------
 - Refactoring exceptions to distinguish between Connection errors and HTTP request/response errors.

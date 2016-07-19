@@ -7,6 +7,7 @@ import os
 import crochet
 import six
 from six.moves.urllib_parse import urlparse
+from twisted.internet.defer import CancelledError
 from twisted.internet.defer import Deferred
 from twisted.internet.endpoints import TCP4ClientEndpoint
 from twisted.internet.error import ConnectError
@@ -216,11 +217,12 @@ def fetch_inner(url, method, headers, body, timeout, connect_timeout):
         """
 
         if error.check(_twisted_web_client().ResponseNeverReceived):
-            raise HTTPTimeoutError(
-                "Connection was closed by fido because the server took "
-                "more than timeout={timeout} seconds to "
-                "send the response".format(timeout=timeout)
-            )
+            if error.value.reasons[0].check(CancelledError):
+                raise HTTPTimeoutError(
+                    "Connection was closed by fido because the server took "
+                    "more than timeout={timeout} seconds to "
+                    "send the response".format(timeout=timeout)
+                )
 
         elif error.check(ConnectError):
             raise TCPConnectionError(
