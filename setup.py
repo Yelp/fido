@@ -26,7 +26,6 @@ setup(
         'service_identity',
         'six',
         'pyOpenSSL',
-        'psutil',
         'yelp_bytes',
     ],
     extras_require={
