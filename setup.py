@@ -21,6 +21,16 @@ setup(
     author=about['__author__'],
     author_email=about['__email__'],
     packages=find_packages(exclude=["tests", "tests.*"]),
+    classifiers=[
+        "Development Status :: 5 - Production/Stable",
+        "Intended Audience :: Developers",
+        "Topic :: Software Development :: Libraries :: Python Modules",
+        "License :: OSI Approved :: Apache License",
+        "Operating System :: OS Independent",
+        "Programming Language :: Python :: 2.6",
+        "Programming Language :: Python :: 2.7",
+        "Programming Language :: Python :: 3.4",
+    ],
     install_requires=[
         'crochet',
         'service_identity',
