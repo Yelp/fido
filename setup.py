@@ -26,11 +26,8 @@ setup(
         'service_identity',
         'six',
         'pyOpenSSL',
+        'twisted >= 14.0.0',
         'yelp_bytes',
     ],
-    extras_require={
-        ':python_version!="2.6"': ['twisted >= 14.0.0'],
-        ':python_version=="2.6"': ['twisted >= 14.0.0, < 15.5'],
-    },
     license=about['__license__'],
 )

@@ -1,3 +1,7 @@
+4.1.0 (2016-09-26)
+---------------------
+- Drop support for Python 2.6, fixing a build failure due to attrs not being Python 2.6 compatible anymore.
+
 4.0.1 (2016-07-18)
 ---------------------
 - Throw HTTPTimeoutError only if it was caused by CancelledError (bugfix).
