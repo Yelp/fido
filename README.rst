@@ -6,9 +6,13 @@ Fido
 .. image:: https://coveralls.io/repos/Yelp/fido/badge.svg
   :target: https://coveralls.io/r/Yelp/fido
 
-.. image:: https://pypip.in/version/fido/badge.svg?style=flat
-    :target: https://pypi.python.org/pypi/fido/
-    :alt: PyPi version
+.. image:: https://img.shields.io/pypi/v/fido.svg
+  :target: https://pypi.python.org/pypi/fido/
+  :alt: PyPI version
+
+.. image:: https://img.shields.io/pypi/pyversions/fido.svg
+  :target: https://pypi.python.org/pypi/fido/
+  :alt: Supported Python versions
 
 Introduction
 ============
