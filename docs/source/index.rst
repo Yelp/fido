@@ -16,9 +16,9 @@ threads (otherwise you could just use a `ThreadPoolExecutor`_).
 
 Here is an example of using Fido::
 
-    future = fido.fetch('http://www.yelp.com')
+    future = fido.fetch('http://www.example.com')
     # Work happens in a background thread...
-    response = future.result(timeout=2)
+    response = future.wait(timeout=2)
     print response.body
 
 Frequently Asked Questions
@@ -51,7 +51,7 @@ the http proxy before starting your python process.
 Example::
 
     $ export http_proxy="http://localhost:8000"
-    $ python -c "import fido; print fido.fetch("http://www.yelp.com").result().body
+    $ python -c "import fido; print fido.fetch("http://www.example.com").wait().body
 
 
 API
