@@ -80,6 +80,29 @@ def test_get_agent_with_http_proxy():
     assert isinstance(agent, _twisted_web_client().ProxyAgent)
 
 
+def test_get_agent_no_http_proxy_tcp_nodelay():
+    with mock.patch.dict('os.environ',
+                         {'tcp_nodelay': '1'}):
+        agent = fido.fido.get_agent(
+            mock.Mock(spec=_twisted_web_client().Agent),
+            connect_timeout=None)
+
+    from fido.client import HTTPConnectionPoolOverride
+    assert isinstance(agent._pool, HTTPConnectionPoolOverride)
+
+
+def test_get_agent_with_http_proxy_tcp_nodelay():
+    with mock.patch.dict('os.environ',
+                         {'tcp_nodelay': '1',
+                          'http_proxy': 'http://localhost:8000'}):
+        agent = fido.fido.get_agent(
+            mock.Mock(spec=_twisted_web_client().Agent),
+            connect_timeout=None)
+
+    from fido.client import HTTPConnectionPoolOverride
+    assert isinstance(agent._pool, HTTPConnectionPoolOverride)
+
+
 def test_deferred_errback_chain():
     """
     Test exception thrown on the deferred correctly triggers the errback chain

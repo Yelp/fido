@@ -34,8 +34,8 @@ def _import_reactor():
 
 
 def _twisted_web_client():
-    from twisted.web import client
-    return client
+    from fido.client import _twisted_web_client
+    return _twisted_web_client()
 
 
 DEFAULT_USER_AGENT = 'Fido/%s' % __about__.__version__
@@ -191,7 +191,9 @@ def fetch_inner(url, method, headers, body, timeout, connect_timeout):
     bodyProducer, twisted_headers = _build_body_producer(body, headers)
     reactor = _import_reactor()
 
-    deferred = get_agent(reactor, connect_timeout).request(
+    agent = get_agent(reactor, connect_timeout)
+
+    deferred = agent.request(
         method=method,
         uri=url,
         headers=listify_headers(twisted_headers),
@@ -253,10 +255,23 @@ def get_agent(reactor, connect_timeout=None):
 
     # TODO: Would be nice to have https_proxy support too.
     http_proxy = os.environ.get('http_proxy')
+
+    tcp_nodelay = os.environ.get('tcp_nodelay')
+
     if http_proxy is None:
-        return _twisted_web_client().Agent(
-            reactor,
-            connectTimeout=connect_timeout)
+        if tcp_nodelay is not None:
+            from fido.client import HTTPConnectionPoolOverride
+            pool = HTTPConnectionPoolOverride(reactor, False)
+            return _twisted_web_client().Agent(
+                reactor,
+                connectTimeout=connect_timeout,
+                pool=pool
+            )
+        else:
+            return _twisted_web_client().Agent(
+                reactor,
+                connectTimeout=connect_timeout
+            )
 
     parse_result = urlparse(http_proxy)
     http_proxy_endpoint = TCP4ClientEndpoint(
@@ -265,7 +280,12 @@ def get_agent(reactor, connect_timeout=None):
         parse_result.port or 80,
         timeout=connect_timeout)
 
-    return _twisted_web_client().ProxyAgent(http_proxy_endpoint)
+    if tcp_nodelay is not None:
+        from fido.client import HTTPConnectionPoolOverride
+        pool = HTTPConnectionPoolOverride(reactor, False)
+        return _twisted_web_client().ProxyAgent(http_proxy_endpoint, pool=pool)
+    else:
+        return _twisted_web_client().ProxyAgent(http_proxy_endpoint)
 
 
 def fetch(
