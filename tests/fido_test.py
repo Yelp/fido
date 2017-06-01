@@ -81,26 +81,31 @@ def test_get_agent_with_http_proxy():
 
 
 def test_get_agent_no_http_proxy_tcp_nodelay():
-    with mock.patch.dict('os.environ',
-                         {'tcp_nodelay': '1'}):
-        agent = fido.fido.get_agent(
-            mock.Mock(spec=_twisted_web_client().Agent),
-            connect_timeout=None)
+    agent = fido.fido.get_agent(
+        mock.Mock(spec=_twisted_web_client().Agent),
+        connect_timeout=None,
+        tcp_nodelay=True)
 
-    from fido.client import HTTPConnectionPoolOverride
+    from fido._client import HTTPConnectionPoolOverride
+    from fido._client import HTTP11ClientFactoryOverride
+
     assert isinstance(agent._pool, HTTPConnectionPoolOverride)
+    assert agent._pool._factory == HTTP11ClientFactoryOverride
 
 
 def test_get_agent_with_http_proxy_tcp_nodelay():
     with mock.patch.dict('os.environ',
-                         {'tcp_nodelay': '1',
-                          'http_proxy': 'http://localhost:8000'}):
+                         {'http_proxy': 'http://yelp.com:80'}):
         agent = fido.fido.get_agent(
             mock.Mock(spec=_twisted_web_client().Agent),
-            connect_timeout=None)
+            connect_timeout=None,
+            tcp_nodelay=True)
 
-    from fido.client import HTTPConnectionPoolOverride
+    from fido._client import HTTPConnectionPoolOverride
+    from fido._client import HTTP11ClientFactoryOverride
+
     assert isinstance(agent._pool, HTTPConnectionPoolOverride)
+    assert agent._pool._factory == HTTP11ClientFactoryOverride
 
 
 def test_deferred_errback_chain():

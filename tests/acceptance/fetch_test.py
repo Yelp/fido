@@ -169,12 +169,32 @@ def test_fetch_headers(server_url):
     assert actual_headers.get(b'Foo') == [b'bar']
 
 
+def test_fetch_headers_tcp_nodelay_same_result(server_url):
+    headers = {'foo': ['bar']}
+    eventual_result = fido.fetch(server_url + ECHO_URL,
+                                 headers=headers,
+                                 tcp_nodelay=True)
+    actual_headers = eventual_result.wait().headers
+    assert actual_headers.get(b'Foo') == [b'bar']
+
+
 def test_json_body(server_url):
     body = b'{"some_json_data": 30}'
     eventual_result = fido.fetch(
         server_url + ECHO_URL,
         method='POST',
         body=body
+    )
+    assert eventual_result.wait().json()['some_json_data'] == 30
+
+
+def test_json_body_tcp_nodelay_same_result(server_url):
+    body = b'{"some_json_data": 30}'
+    eventual_result = fido.fetch(
+        server_url + ECHO_URL,
+        method='POST',
+        body=body,
+        tcp_nodelay=True
     )
     assert eventual_result.wait().json()['some_json_data'] == 30
 
@@ -222,6 +242,17 @@ def test_fetch_body(server_url):
     eventual_result = fido.fetch(
         server_url + ECHO_URL,
         body=expected_body
+    )
+    actual_body = eventual_result.wait().body
+    assert expected_body == actual_body
+
+
+def test_fetch_body_tcp_nodelay_same_result(server_url):
+    expected_body = b'corpus'
+    eventual_result = fido.fetch(
+        server_url + ECHO_URL,
+        body=expected_body,
+        tcp_nodelay=True
     )
     actual_body = eventual_result.wait().body
     assert expected_body == actual_body
