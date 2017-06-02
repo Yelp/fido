@@ -32,11 +32,18 @@ setup(
     ],
     install_requires=[
         'crochet',
-        'service_identity',
         'six',
-        'pyOpenSSL',
         'twisted >= 14.0.0',
         'yelp_bytes',
     ],
+    extras_require={
+        'tls': [
+            # Bug in pip's resolution of extras of extras is broken
+            # so we list twisted[tls] out manually
+            # see https://github.com/pypa/pip/issues/988
+            'pyOpenSSL',
+            'service-identity'
+        ]
+    },
     license=about['__license__'],
 )

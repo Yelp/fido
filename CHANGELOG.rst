@@ -1,3 +1,10 @@
+4.2.0 (2016-09-26)
+------------------
+- Move TLS support into an extras so that the vast majority of users that are
+  not using TLS don't need to install extra dependencies. Note that if this
+  causes breakage for you change your dependency to fido[tls] and it should
+  be fine
+
 4.1.0 (2016-09-26)
 ---------------------
 - Drop support for Python 2.6, fixing a build failure due to attrs not being Python 2.6 compatible anymore.
