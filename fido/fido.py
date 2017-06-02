@@ -173,7 +173,7 @@ def fetch_inner(
     body,
     timeout,
     connect_timeout,
-    tcp_nodelay
+    tcp_nodelay,
 ):
     """
     This function must be run in the reactor thread because it is calling
@@ -205,7 +205,7 @@ def fetch_inner(
         method=method,
         uri=url,
         headers=listify_headers(twisted_headers),
-        bodyProducer=bodyProducer
+        bodyProducer=bodyProducer,
     )
 
     def response_callback(response):
@@ -275,7 +275,7 @@ def get_agent(reactor, connect_timeout=None, tcp_nodelay=False):
         return _twisted_web_client().Agent(
             reactor,
             connectTimeout=connect_timeout,
-            pool=pool
+            pool=pool,
         )
 
     parse_result = urlparse(http_proxy)
@@ -295,7 +295,7 @@ def fetch(
     body='',
     timeout=DEFAULT_TIMEOUT,
     connect_timeout=DEFAULT_CONNECT_TIMEOUT,
-    tcp_nodelay=False
+    tcp_nodelay=False,
 ):
     """
     Make an HTTP request.
