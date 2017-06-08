@@ -153,7 +153,7 @@ def test_agent_connect_timeout(tcp_nodelay):
         tcp_nodelay=tcp_nodelay
     )
     # wait enough for the connection to be dropped by Twisted Agent
-    time.sleep(2 * TIMEOUT_TEST)
+    time.sleep(3 * TIMEOUT_TEST)
 
     # timeout errors were thrown and handled in the reactor thread.
     # EventualResult stores them and re-raises on result retrieval
