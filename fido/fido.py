@@ -256,6 +256,7 @@ def get_agent(reactor, connect_timeout=None, tcp_nodelay=False):
 
     :param connect_timeout: connection timeout in seconds
     :type connect_timeout: float
+    :param tcp_nodelay: flag to enable tcp_nodelay for request
     :type tcp_nodelay: boolean
     :returns: :class:`twisted.web.client.ProxyAgent` when an http_proxy
         environment variable is present, :class:`twisted.web.client.Agent`
@@ -269,7 +270,7 @@ def get_agent(reactor, connect_timeout=None, tcp_nodelay=False):
 
     if tcp_nodelay:
         from fido._client import HTTPConnectionPoolOverride
-        pool = HTTPConnectionPoolOverride(reactor, False)
+        pool = HTTPConnectionPoolOverride(reactor=reactor, persistent=False)
 
     if http_proxy is None:
         return _twisted_web_client().Agent(
@@ -335,10 +336,12 @@ def fetch(
 
     # initializes twisted reactor in a different thread
     crochet.setup()
-    return fetch_inner(url,
-                       method,
-                       headers,
-                       body,
-                       timeout,
-                       connect_timeout,
-                       tcp_nodelay)
+    return fetch_inner(
+        url,
+        method,
+        headers,
+        body,
+        timeout,
+        connect_timeout,
+        tcp_nodelay,
+    )
