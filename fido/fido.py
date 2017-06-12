@@ -34,8 +34,8 @@ def _import_reactor():
 
 
 def _twisted_web_client():
-    from twisted.web import client
-    return client
+    from fido._client import _twisted_web_client
+    return _twisted_web_client()
 
 
 DEFAULT_USER_AGENT = 'Fido/%s' % __about__.__version__
@@ -166,7 +166,15 @@ def _set_deferred_timeout(reactor, deferred, timeout):
 
 
 @crochet.run_in_reactor
-def fetch_inner(url, method, headers, body, timeout, connect_timeout):
+def fetch_inner(
+    url,
+    method,
+    headers,
+    body,
+    timeout,
+    connect_timeout,
+    tcp_nodelay,
+):
     """
     This function must be run in the reactor thread because it is calling
     twisted API which is not thread safe.
@@ -191,11 +199,13 @@ def fetch_inner(url, method, headers, body, timeout, connect_timeout):
     bodyProducer, twisted_headers = _build_body_producer(body, headers)
     reactor = _import_reactor()
 
-    deferred = get_agent(reactor, connect_timeout).request(
+    agent = get_agent(reactor, connect_timeout, tcp_nodelay)
+
+    deferred = agent.request(
         method=method,
         uri=url,
         headers=listify_headers(twisted_headers),
-        bodyProducer=bodyProducer
+        bodyProducer=bodyProducer,
     )
 
     def response_callback(response):
@@ -241,11 +251,13 @@ def fetch_inner(url, method, headers, body, timeout, connect_timeout):
     return deferred
 
 
-def get_agent(reactor, connect_timeout=None):
+def get_agent(reactor, connect_timeout=None, tcp_nodelay=False):
     """Return appropriate agent based on whether an http_proxy is used or not.
 
     :param connect_timeout: connection timeout in seconds
     :type connect_timeout: float
+    :param tcp_nodelay: flag to enable tcp_nodelay for request
+    :type tcp_nodelay: boolean
     :returns: :class:`twisted.web.client.ProxyAgent` when an http_proxy
         environment variable is present, :class:`twisted.web.client.Agent`
         otherwise.
@@ -253,10 +265,19 @@ def get_agent(reactor, connect_timeout=None):
 
     # TODO: Would be nice to have https_proxy support too.
     http_proxy = os.environ.get('http_proxy')
+
+    pool = None
+
+    if tcp_nodelay:
+        from fido._client import HTTPConnectionPoolOverride
+        pool = HTTPConnectionPoolOverride(reactor=reactor, persistent=False)
+
     if http_proxy is None:
         return _twisted_web_client().Agent(
             reactor,
-            connectTimeout=connect_timeout)
+            connectTimeout=connect_timeout,
+            pool=pool,
+        )
 
     parse_result = urlparse(http_proxy)
     http_proxy_endpoint = TCP4ClientEndpoint(
@@ -265,7 +286,7 @@ def get_agent(reactor, connect_timeout=None):
         parse_result.port or 80,
         timeout=connect_timeout)
 
-    return _twisted_web_client().ProxyAgent(http_proxy_endpoint)
+    return _twisted_web_client().ProxyAgent(http_proxy_endpoint, pool=pool)
 
 
 def fetch(
@@ -275,6 +296,7 @@ def fetch(
     body='',
     timeout=DEFAULT_TIMEOUT,
     connect_timeout=DEFAULT_CONNECT_TIMEOUT,
+    tcp_nodelay=False,
 ):
     """
     Make an HTTP request.
@@ -292,6 +314,7 @@ def fetch(
     :param timeout: maximum allowed request time in seconds.
     :param connect_timeout: maximum time allowed to establish a connection
         in seconds.
+    :param tcp_nodelay: flag to enable tcp_nodelay for request
 
     :returns: a crochet EventualResult object which behaves as a future,
         .wait() can be called on it to retrieve the fido.fido.Response object.
@@ -313,4 +336,12 @@ def fetch(
 
     # initializes twisted reactor in a different thread
     crochet.setup()
-    return fetch_inner(url, method, headers, body, timeout, connect_timeout)
+    return fetch_inner(
+        url,
+        method,
+        headers,
+        body,
+        timeout,
+        connect_timeout,
+        tcp_nodelay,
+    )

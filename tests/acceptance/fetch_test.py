@@ -21,6 +21,13 @@ TIMEOUT_TEST = 1.0
 ECHO_URL = '/echo'
 
 
+# Verifies that setting TCP_NODELAY does not affect
+# the output of fido
+@pytest.fixture(scope="module", params=[False, True])
+def tcp_nodelay(request):
+    return request.param
+
+
 @pytest.yield_fixture(scope="module")
 def server_url():
     """Spin up a localhost web server for testing."""
@@ -104,14 +111,15 @@ def test_eventual_result_timeout(server_url):
     assert eventual_result.original_failure() is None
 
 
-def test_agent_timeout(server_url):
+def test_agent_timeout(server_url, tcp_nodelay):
     """
     Testing that we don't wait forever on the server sending back a response
     """
 
     eventual_result = fido.fetch(
         server_url + ECHO_URL + '/slow',
-        timeout=TIMEOUT_TEST
+        timeout=TIMEOUT_TEST,
+        tcp_nodelay=tcp_nodelay,
     )
 
     # wait for fido to estinguish the timeout and abort before test-assertions
@@ -132,7 +140,7 @@ def test_agent_timeout(server_url):
     )
 
 
-def test_agent_connect_timeout():
+def test_agent_connect_timeout(tcp_nodelay):
     """
     Testing that we don't wait more than connect_timeout to establish a http
     connection
@@ -141,10 +149,11 @@ def test_agent_connect_timeout():
     # google drops TCP SYN packets
     eventual_result = fido.fetch(
         "http://www.google.com:81",
-        connect_timeout=TIMEOUT_TEST
+        connect_timeout=TIMEOUT_TEST,
+        tcp_nodelay=tcp_nodelay,
     )
     # wait enough for the connection to be dropped by Twisted Agent
-    time.sleep(2 * TIMEOUT_TEST)
+    time.sleep(3 * TIMEOUT_TEST)
 
     # timeout errors were thrown and handled in the reactor thread.
     # EventualResult stores them and re-raises on result retrieval
@@ -162,41 +171,46 @@ def test_agent_connect_timeout():
     )
 
 
-def test_fetch_headers(server_url):
+def test_fetch_headers(server_url, tcp_nodelay):
     headers = {'foo': ['bar']}
-    eventual_result = fido.fetch(server_url + ECHO_URL, headers=headers)
+    eventual_result = fido.fetch(server_url + ECHO_URL,
+                                 headers=headers,
+                                 tcp_nodelay=tcp_nodelay)
     actual_headers = eventual_result.wait().headers
     assert actual_headers.get(b'Foo') == [b'bar']
 
 
-def test_json_body(server_url):
+def test_json_body(server_url, tcp_nodelay):
     body = b'{"some_json_data": 30}'
     eventual_result = fido.fetch(
         server_url + ECHO_URL,
         method='POST',
-        body=body
+        body=body,
+        tcp_nodelay=tcp_nodelay,
     )
     assert eventual_result.wait().json()['some_json_data'] == 30
 
 
-def test_content_length_readded_by_twisted(server_url):
+def test_content_length_readded_by_twisted(server_url, tcp_nodelay):
     headers = {'Content-Length': '250'}
     body = b'{"some_json_data": 30}'
     eventual_result = fido.fetch(
         server_url + '/content_length',
         method='POST',
         headers=headers,
-        body=body
+        body=body,
+        tcp_nodelay=tcp_nodelay,
     )
     content_length = int(eventual_result.wait().body)
     assert content_length == 22
 
 
-def test_fetch_content_type(server_url):
+def test_fetch_content_type(server_url, tcp_nodelay):
     expected_content_type = b'text/html'
     eventual_result = fido.fetch(
         server_url + ECHO_URL,
-        headers={'Content-Type': expected_content_type}
+        headers={'Content-Type': expected_content_type},
+        tcp_nodelay=tcp_nodelay,
     )
     actual_content_type = eventual_result.wait().headers.\
         get(b'Content-Type')
@@ -206,32 +220,35 @@ def test_fetch_content_type(server_url):
 @pytest.mark.parametrize(
     'header_name', ('User-Agent', 'user-agent')
 )
-def test_fetch_user_agent(server_url, header_name):
+def test_fetch_user_agent(server_url, header_name, tcp_nodelay):
     expected_user_agent = [b'skynet']
     headers = {header_name: expected_user_agent}
     eventual_result = fido.fetch(
         server_url + ECHO_URL,
         headers=headers,
+        tcp_nodelay=tcp_nodelay,
     )
     actual_user_agent = eventual_result.wait().headers.get(b'User-Agent')
     assert expected_user_agent == actual_user_agent
 
 
-def test_fetch_body(server_url):
+def test_fetch_body(server_url, tcp_nodelay):
     expected_body = b'corpus'
     eventual_result = fido.fetch(
         server_url + ECHO_URL,
-        body=expected_body
+        body=expected_body,
+        tcp_nodelay=tcp_nodelay,
     )
     actual_body = eventual_result.wait().body
     assert expected_body == actual_body
 
 
-def test_fido_request_throws_no_timeout_when_header_value_not_list():
+def test_fido_request_no_timeout_when_header_value_not_list(tcp_nodelay):
     fido.fetch(
         'http://www.yelp.com',
         headers={
             'Accept-Charset': 'utf-8',
             'Accept-Language': ['en-US']
         },
+        tcp_nodelay=tcp_nodelay,
     ).wait(timeout=5)
