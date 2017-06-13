@@ -41,8 +41,9 @@ setup(
             # Bug in pip's resolution of extras of extras is broken
             # so we list twisted[tls] out manually
             # see https://github.com/pypa/pip/issues/988
-            'pyOpenSSL',
-            'service-identity'
+            'pyOpenSSL >= 16.0.0',
+            'service-identity',
+            'idna >= 0.6, != 2.3',
         ]
     },
     license=about['__license__'],
