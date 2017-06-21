@@ -30,15 +30,23 @@ Here is an example of using Fido::
 Frequently Asked Questions
 ==========================
 
-Do you support SSL?
+Do you support TLS?
 -------------------
 
-Yes, although this has not been vetted by security professionals. One should use this functionality at their own risk. In more detail: Fido uses the Twisted defaults, which delegate to pyOpenSSL_ and `service_identity`_ for the actual SSL work.
+Yes, although this has not been vetted by security professionals.
+One should use this functionality at their own risk.
+In more detail: Fido uses the Twisted defaults, which delegate to
+pyOpenSSL_ and `service_identity`_ for the actual TLS work.
+
+Note that to get this you need to install the `tls` extra::
+
+    $ pip install --upgrade fido[tls]
 
 Is the API stable?
 ------------------
 
-Probably not.  However, it is currently very simple, so it shouldn't be hard to upgrade code if there's a non backwards-compatible change.
+Probably not.  However, it is currently very simple, so it shouldn't be hard
+to upgrade code if there's a non backwards-compatible change.
 
 Do I need to initialize `Crochet`_?
 -----------------------------------
@@ -64,6 +72,10 @@ Installation
 Fido can be installed using `pip install`, like so::
 
     $ pip install --upgrade fido
+
+If you want TLS capabilities::
+
+    $ pip install --upgrade fido[tls]
 
 License
 ========
