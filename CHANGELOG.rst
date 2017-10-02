@@ -1,3 +1,7 @@
+4.2.2 (2017-10-02)
+------------------
+- Make listify_headers UTF-8 encode keys (bugfix see issue #55).
+
 4.2.1 (2017-07-05)
 ------------------
 - Make HTTPTimeoutError inherit from crochet.TimeoutError. This helps with code that still catches crochet.TimeoutError and also helps with a recent change in bravado to convert crochet.TimeoutError into HTTPTimeoutError.
