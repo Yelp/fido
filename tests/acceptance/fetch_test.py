@@ -3,6 +3,7 @@ import logging
 import threading
 import time
 
+import zlib
 import crochet
 import pytest
 from six.moves import BaseHTTPServer
@@ -13,12 +14,23 @@ import fido
 from fido.fido import DEFAULT_USER_AGENT
 from fido.exceptions import TCPConnectionError
 from fido.exceptions import HTTPTimeoutError
+from fido.exceptions import GzipDecompressionError
 
 
 SERVER_OVERHEAD_TIME = 2.0
 TIMEOUT_TEST = 1.0
 
 ECHO_URL = '/echo'
+GZIP_URL = '/gzip'
+
+
+def _compress_gzip(buffer, compression_level=6):
+    compress_gzip = zlib.compressobj(
+        compression_level,
+        zlib.DEFLATED,
+        zlib.MAX_WBITS | 16,
+    )
+    return compress_gzip.compress(buffer) + compress_gzip.flush()
 
 
 # Verifies that setting TCP_NODELAY does not affect
@@ -51,6 +63,15 @@ def server_url():
             if content_length > 0:
                 self.wfile.write(self.rfile.read(content_length))
 
+        def gzip(self):
+            self.send_response(200)
+            self.send_header('Content-Encoding', 'gzip')
+            self.end_headers()
+            content_length = int(self.headers.get('Content-Length', 0))
+            if content_length > 0:
+                self.wfile.write(_compress_gzip(
+                    self.rfile.read(content_length)))
+
         def content_length(self):
             """Send back the content-length number as the response."""
             self.send_response(200)
@@ -65,6 +86,8 @@ def server_url():
         def do_GET(self):
             if ECHO_URL in self.path:
                 self.echo()
+            elif GZIP_URL in self.path:
+                self.gzip()
 
         def do_POST(self):
             if 'content_length' in self.path:
@@ -252,3 +275,41 @@ def test_fido_request_no_timeout_when_header_value_not_list(tcp_nodelay):
         },
         tcp_nodelay=tcp_nodelay,
     ).wait(timeout=5)
+
+
+def test_fido_request_gzip_enabled(server_url):
+    expected_body = b'hello world'
+
+    # Ensure invalid gzipped responses raise a
+    # GzipDecompressionError exception.
+    with pytest.raises(GzipDecompressionError):
+        response = fido.fetch(
+            server_url + ECHO_URL,
+            headers={'Content-Encoding': 'gzip'},
+            body=expected_body,
+            gzip_enabled=True,
+        ).wait()
+
+    # Ensure valid gzipped responses are decompressed
+    # when gzip_enabled is True.
+    response = fido.fetch(
+        server_url + GZIP_URL,
+        body=expected_body,
+        gzip_enabled=True,
+    ).wait()
+    actual_body = response.body
+    assert expected_body == actual_body
+
+
+def test_fido_request_gzip_disabled(server_url):
+    expected_body = b'hello world'
+
+    # Ensure that gzipped responses with gzip_enabled set
+    # to false remain compressed.
+    response = fido.fetch(
+        server_url + GZIP_URL,
+        body=expected_body,
+        gzip_enabled=False,
+    ).wait()
+    actual_body = response.body
+    assert _compress_gzip(expected_body) == actual_body
