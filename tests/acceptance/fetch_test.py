@@ -12,6 +12,7 @@ from yelp_bytes import to_bytes
 
 import fido
 from fido.fido import DEFAULT_USER_AGENT
+from fido.fido import GZIP_WINDOW_SIZE
 from fido.exceptions import TCPConnectionError
 from fido.exceptions import HTTPTimeoutError
 from fido.exceptions import GzipDecompressionError
@@ -24,11 +25,11 @@ ECHO_URL = '/echo'
 GZIP_URL = '/gzip'
 
 
-def _compress_gzip(buffer, compression_level=6):
+def _compress_gzip(buffer):
     compress_gzip = zlib.compressobj(
-        compression_level,
+        zlib.Z_DEFAULT_COMPRESSION,
         zlib.DEFLATED,
-        zlib.MAX_WBITS | 16,
+        GZIP_WINDOW_SIZE,
     )
     return compress_gzip.compress(buffer) + compress_gzip.flush()
 
@@ -64,6 +65,16 @@ def server_url():
                 self.wfile.write(self.rfile.read(content_length))
 
         def gzip(self):
+            accept_encoding_headers = []
+            for k, v in self.headers.items():
+                if k.lower() == 'accept-encoding':
+                    accept_encoding_headers.append(v)
+
+            if 'gzip' not in accept_encoding_headers:
+                self.send_response(500)
+                self.end_headers()
+                return
+
             self.send_response(200)
             self.send_header('Content-Encoding', 'gzip')
             self.end_headers()
@@ -283,6 +294,10 @@ def test_fido_request_gzip_enabled(server_url):
     # Ensure invalid gzipped responses raise a
     # GzipDecompressionError exception.
     with pytest.raises(GzipDecompressionError):
+        # Here we trick the client into decompressing the text
+        # response by echoing a gzip content-encoding response
+        # header. The client should then fail to decompress the
+        # text response.
         response = fido.fetch(
             server_url + ECHO_URL,
             headers={'Content-Encoding': 'gzip'},
@@ -294,10 +309,16 @@ def test_fido_request_gzip_enabled(server_url):
     # when gzip_enabled is True.
     response = fido.fetch(
         server_url + GZIP_URL,
+        # Ensure that fido successfully appends gzip to accept-encoding.
+        headers={
+            'Content-Encoding': 'gzip',
+            'Accept-Encoding': 'deflate, br, identity'
+        },
         body=expected_body,
         gzip_enabled=True,
     ).wait()
     actual_body = response.body
+    assert response.code == 200
     assert expected_body == actual_body
 
 
@@ -309,7 +330,9 @@ def test_fido_request_gzip_disabled(server_url):
     response = fido.fetch(
         server_url + GZIP_URL,
         body=expected_body,
+        headers={'Accept-Encoding': 'gzip'},
         gzip_enabled=False,
     ).wait()
     actual_body = response.body
+    assert response.code == 200
     assert _compress_gzip(expected_body) == actual_body

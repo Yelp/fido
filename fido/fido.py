@@ -49,6 +49,8 @@ DEFAULT_USER_AGENT = 'Fido/%s' % __about__.__version__
 DEFAULT_TIMEOUT = None
 DEFAULT_CONNECT_TIMEOUT = None
 
+# To support the gzip format, the window size must include space for gzip
+# headers and checksums.
 GZIP_WINDOW_SIZE = zlib.MAX_WBITS | 16
 
 
@@ -219,11 +221,16 @@ def fetch_inner(
     reactor = _import_reactor()
 
     agent = get_agent(reactor, connect_timeout, tcp_nodelay)
+    new_headers = listify_headers(twisted_headers)
+
+    if gzip_enabled:
+        if 'gzip' not in new_headers.getRawHeaders('accept-encoding', []):
+            new_headers.addRawHeader('accept-encoding', 'gzip')
 
     deferred = agent.request(
         method=method,
         uri=url,
-        headers=listify_headers(twisted_headers),
+        headers=new_headers,
         bodyProducer=bodyProducer,
     )
 
@@ -335,6 +342,9 @@ def fetch(
     :param connect_timeout: maximum time allowed to establish a connection
         in seconds.
     :param tcp_nodelay: flag to enable tcp_nodelay for request
+    :param gzip_enabled: flag to enable decompressing gzipped responses.
+        Note that the content-encoding response header will still
+        reflect the encoding of the original response (i.e gzip).
 
     :returns: a crochet EventualResult object which behaves as a future,
         .wait() can be called on it to retrieve the fido.fido.Response object.
