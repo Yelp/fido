@@ -3,10 +3,13 @@ from __future__ import absolute_import
 import io
 import json
 import os
+import sys
 
 import crochet
 import six
+import zlib
 from six.moves.urllib_parse import urlparse
+from twisted.python.failure import Failure
 from twisted.internet.defer import CancelledError
 from twisted.internet.defer import Deferred
 from twisted.internet.endpoints import TCP4ClientEndpoint
@@ -18,6 +21,7 @@ from . import __about__
 from .common import listify_headers
 from fido.exceptions import TCPConnectionError
 from fido.exceptions import HTTPTimeoutError
+from fido.exceptions import GzipDecompressionError
 
 
 ##############################################################################
@@ -45,6 +49,10 @@ DEFAULT_USER_AGENT = 'Fido/%s' % __about__.__version__
 # Requests, concurrent.futures, python socket stdlib
 DEFAULT_TIMEOUT = None
 DEFAULT_CONNECT_TIMEOUT = None
+
+# To support the gzip format, the window size must include space for gzip
+# headers and checksums.
+GZIP_WINDOW_SIZE = zlib.MAX_WBITS | 16
 
 
 def _build_body_producer(body, headers):
@@ -100,10 +108,11 @@ class Response(object):
 
 class HTTPBodyFetcher(Protocol):
 
-    def __init__(self, response, finished):
+    def __init__(self, response, finished, decompress_gzip):
         self.buffer = io.BytesIO()
         self.response = response
         self.finished = finished
+        self.decompress_gzip = decompress_gzip
 
     def dataReceived(self, data):
         self.buffer.write(data)
@@ -127,11 +136,29 @@ class HTTPBodyFetcher(Protocol):
 
         if (reason.check(_twisted_web_client().ResponseDone) or
                 reason.check(_twisted_web_client().PotentialDataLoss)):
+
+            content_encoding = self.response.headers.getRawHeaders(
+                'Content-Encoding', [])
+            body = self.buffer.getvalue()
+
+            if 'gzip' in content_encoding and self.decompress_gzip:
+                try:
+                    body = zlib.decompress(body, GZIP_WINDOW_SIZE)
+                except zlib.error as e:
+                    self.finished.errback(
+                        Failure(
+                            exc_type=GzipDecompressionError,
+                            exc_value=GzipDecompressionError(e),
+                            exc_tb=sys.exc_info()[2],
+                        ),
+                    )
+                    return
+
             self.finished.callback(
                 Response(
                     code=self.response.code,
                     headers=self.response.headers,
-                    body=self.buffer.getvalue(),
+                    body=body,
                     reason=self.response.phrase,
                 )
             )
@@ -174,6 +201,7 @@ def fetch_inner(
     timeout,
     connect_timeout,
     tcp_nodelay,
+    decompress_gzip,
 ):
     """
     This function must be run in the reactor thread because it is calling
@@ -200,18 +228,25 @@ def fetch_inner(
     reactor = _import_reactor()
 
     agent = get_agent(reactor, connect_timeout, tcp_nodelay)
+    new_headers = listify_headers(twisted_headers)
+
+    if decompress_gzip:
+        if 'gzip' not in new_headers.getRawHeaders('accept-encoding', []):
+            new_headers.addRawHeader('accept-encoding', 'gzip')
 
     deferred = agent.request(
         method=method,
         uri=url,
-        headers=listify_headers(twisted_headers),
+        headers=new_headers,
         bodyProducer=bodyProducer,
     )
 
     def response_callback(response):
         """Fetch the body once we've received the headers"""
         finished = Deferred()
-        response.deliverBody(HTTPBodyFetcher(response, finished))
+        response.deliverBody(
+            HTTPBodyFetcher(response, finished, decompress_gzip)
+        )
         return finished
 
     deferred.addCallback(response_callback)
@@ -297,6 +332,7 @@ def fetch(
     timeout=DEFAULT_TIMEOUT,
     connect_timeout=DEFAULT_CONNECT_TIMEOUT,
     tcp_nodelay=False,
+    decompress_gzip=False,
 ):
     """
     Make an HTTP request.
@@ -315,6 +351,9 @@ def fetch(
     :param connect_timeout: maximum time allowed to establish a connection
         in seconds.
     :param tcp_nodelay: flag to enable tcp_nodelay for request
+    :param decompress_gzip: flag to enable decompressing gzipped responses.
+        Note that the content-encoding response header will still
+        reflect the encoding of the original response (i.e gzip).
 
     :returns: a crochet EventualResult object which behaves as a future,
         .wait() can be called on it to retrieve the fido.fido.Response object.
@@ -344,4 +383,5 @@ def fetch(
         timeout,
         connect_timeout,
         tcp_nodelay,
+        decompress_gzip,
     )
