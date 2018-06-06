@@ -1,3 +1,7 @@
+4.2.3 (2018-06-06)
+-------------------
+- Add support for gzip decompression
+
 4.2.2 (2017-10-02)
 ------------------
 - Make listify_headers UTF-8 encode keys (bugfix see issue #55).
