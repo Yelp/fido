@@ -28,12 +28,12 @@ setup(
         "License :: OSI Approved :: Apache Software License",
         "Operating System :: OS Independent",
         "Programming Language :: Python :: 2.7",
+        "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.4",
     ],
     install_requires=[
         'crochet',
         'six',
-        'twisted >= 14.0.0',
         'yelp_bytes',
     ],
     extras_require={
@@ -44,7 +44,14 @@ setup(
             'pyOpenSSL >= 16.0.0',
             'service-identity',
             'idna >= 0.6, != 2.3',
-        ]
+        ],
+
+        # Defining twisted dependency here to allow twisted
+        # requirement constraint defined by python_version
+        '': ['twisted >= 14.0.0'],
+        # Twisted>=17 does support only python 2.7 and 3.5+
+        ':python_version=="3.3"': ['twisted < 17.0.0'],
+        ':python_version=="3.4"': ['twisted < 17.0.0'],
     },
     license=about['__license__'],
 )
