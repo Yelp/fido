@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 import logging
-import threading
 import time
 
 import zlib
+from multiprocessing import Process
+
 import crochet
 import pytest
 from six.moves import BaseHTTPServer
@@ -113,11 +114,16 @@ def server_url():
         request_queue_size = 1000
 
     httpd = MultiThreadedHTTPServer(('localhost', 0), TestHandler)
-    httpd_thread = threading.Thread(target=httpd.serve_forever)
-    httpd_thread.start()
-    yield 'http://%s:%d/' % (httpd.server_address[0], httpd.server_address[1])
-    httpd.server_close()
-    httpd_thread.join()
+    web_service_process = Process(target=httpd.serve_forever)
+    try:
+        web_service_process.start()
+        server_address = 'http://{host}:{port}'.format(
+            host=httpd.server_address[0],
+            port=httpd.server_address[1],
+        )
+        yield server_address
+    finally:
+        web_service_process.terminate()
 
 
 def test_fetch_basic(server_url):
