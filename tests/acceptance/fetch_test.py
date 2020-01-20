@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 import logging
-import threading
 import time
 
 import zlib
+from multiprocessing import Process
+
 import crochet
 import pytest
 from six.moves import BaseHTTPServer
@@ -113,17 +114,23 @@ def server_url():
         request_queue_size = 1000
 
     httpd = MultiThreadedHTTPServer(('localhost', 0), TestHandler)
-    httpd_thread = threading.Thread(target=httpd.serve_forever)
-    httpd_thread.start()
-    yield 'http://%s:%d/' % (httpd.server_address[0], httpd.server_address[1])
-    httpd.server_close()
-    httpd_thread.join()
+    web_service_process = Process(target=httpd.serve_forever)
+    try:
+        web_service_process.start()
+        server_address = 'http://{host}:{port}'.format(
+            host=httpd.server_address[0],
+            port=httpd.server_address[1],
+        )
+        yield server_address
+    finally:
+        web_service_process.terminate()
 
 
 def test_fetch_basic(server_url):
-    response = fido.fetch(server_url + ECHO_URL).wait()
-    assert response.headers.get(b'User-Agent') == \
-        [to_bytes(DEFAULT_USER_AGENT)]
+    response = fido.fetch(server_url + ECHO_URL).wait(timeout=1)
+    assert response.headers.get(b'User-Agent') == [
+        to_bytes(DEFAULT_USER_AGENT),
+    ]
     assert response.reason == b'OK'
     assert response.code == 200
 
@@ -164,7 +171,7 @@ def test_agent_timeout(server_url, tcp_nodelay):
     assert eventual_result.original_failure() is not None
 
     with pytest.raises(HTTPTimeoutError) as e:
-        eventual_result.wait()
+        eventual_result.wait(timeout=1)
 
     assert (
         "Connection was closed by fido because the server took "
@@ -194,7 +201,7 @@ def test_agent_connect_timeout(tcp_nodelay):
     assert eventual_result.original_failure() is not None
 
     with pytest.raises(TCPConnectionError) as e:
-        eventual_result.wait()
+        eventual_result.wait(timeout=1)
 
     assert (
         "Connection was closed by Twisted Agent because there was "
@@ -207,10 +214,12 @@ def test_agent_connect_timeout(tcp_nodelay):
 
 def test_fetch_headers(server_url, tcp_nodelay):
     headers = {'foo': ['bar']}
-    eventual_result = fido.fetch(server_url + ECHO_URL,
-                                 headers=headers,
-                                 tcp_nodelay=tcp_nodelay)
-    actual_headers = eventual_result.wait().headers
+    eventual_result = fido.fetch(
+        server_url + ECHO_URL,
+        headers=headers,
+        tcp_nodelay=tcp_nodelay,
+    )
+    actual_headers = eventual_result.wait(timeout=1).headers
     assert actual_headers.get(b'Foo') == [b'bar']
 
 
@@ -222,7 +231,7 @@ def test_json_body(server_url, tcp_nodelay):
         body=body,
         tcp_nodelay=tcp_nodelay,
     )
-    assert eventual_result.wait().json()['some_json_data'] == 30
+    assert eventual_result.wait(timeout=1).json()['some_json_data'] == 30
 
 
 def test_content_length_readded_by_twisted(server_url, tcp_nodelay):
@@ -235,7 +244,7 @@ def test_content_length_readded_by_twisted(server_url, tcp_nodelay):
         body=body,
         tcp_nodelay=tcp_nodelay,
     )
-    content_length = int(eventual_result.wait().body)
+    content_length = int(eventual_result.wait(timeout=1).body)
     assert content_length == 22
 
 
@@ -246,8 +255,9 @@ def test_fetch_content_type(server_url, tcp_nodelay):
         headers={'Content-Type': expected_content_type},
         tcp_nodelay=tcp_nodelay,
     )
-    actual_content_type = eventual_result.wait().headers.\
-        get(b'Content-Type')
+    actual_content_type = eventual_result.wait(
+        timeout=1,
+    ).headers.get(b'Content-Type')
     assert [expected_content_type] == actual_content_type
 
 
@@ -262,7 +272,9 @@ def test_fetch_user_agent(server_url, header_name, tcp_nodelay):
         headers=headers,
         tcp_nodelay=tcp_nodelay,
     )
-    actual_user_agent = eventual_result.wait().headers.get(b'User-Agent')
+    actual_user_agent = eventual_result.wait(
+        timeout=1,
+    ).headers.get(b'User-Agent')
     assert expected_user_agent == actual_user_agent
 
 
@@ -273,7 +285,7 @@ def test_fetch_body(server_url, tcp_nodelay):
         body=expected_body,
         tcp_nodelay=tcp_nodelay,
     )
-    actual_body = eventual_result.wait().body
+    actual_body = eventual_result.wait(timeout=1).body
     assert expected_body == actual_body
 
 
@@ -298,12 +310,12 @@ def test_fido_request_decompress_gzip(server_url):
         # response by echoing a gzip content-encoding response
         # header. The client should then fail to decompress the
         # text response.
-        response = fido.fetch(
+        _ = fido.fetch(
             server_url + ECHO_URL,
             headers={'Content-Encoding': 'gzip'},
             body=expected_body,
             decompress_gzip=True,
-        ).wait()
+        ).wait(timeout=1)
 
     # Ensure valid gzipped responses are decompressed
     # when gzip_enabled is True.
@@ -316,7 +328,7 @@ def test_fido_request_decompress_gzip(server_url):
         },
         body=expected_body,
         decompress_gzip=True,
-    ).wait()
+    ).wait(timeout=1)
     actual_body = response.body
     assert response.code == 200
     assert expected_body == actual_body
@@ -332,7 +344,7 @@ def test_fido_request_gzip_disabled(server_url):
         body=expected_body,
         headers={'Accept-Encoding': 'gzip'},
         decompress_gzip=False,
-    ).wait()
+    ).wait(timeout=1)
     actual_body = response.body
     assert response.code == 200
     assert _compress_gzip(expected_body) == actual_body
