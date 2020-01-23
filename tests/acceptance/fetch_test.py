@@ -170,14 +170,14 @@ def test_agent_timeout(server_url, tcp_nodelay):
     # EventualResult stores them and re-raises on result retrieval
     assert eventual_result.original_failure() is not None
 
-    with pytest.raises(HTTPTimeoutError) as e:
+    with pytest.raises(HTTPTimeoutError) as excinfo:
         eventual_result.wait(timeout=1)
 
     assert (
         "Connection was closed by fido because the server took "
         "more than timeout={timeout} seconds to "
         "send the response".format(timeout=TIMEOUT_TEST)
-        in str(e)
+        in str(excinfo.value)
     )
 
 
@@ -200,7 +200,7 @@ def test_agent_connect_timeout(tcp_nodelay):
     # EventualResult stores them and re-raises on result retrieval
     assert eventual_result.original_failure() is not None
 
-    with pytest.raises(TCPConnectionError) as e:
+    with pytest.raises(TCPConnectionError) as excinfo:
         eventual_result.wait(timeout=1)
 
     assert (
@@ -208,7 +208,7 @@ def test_agent_connect_timeout(tcp_nodelay):
         "a problem establishing the connection or the "
         "connect_timeout={connect_timeout} was reached."
         .format(connect_timeout=TIMEOUT_TEST)
-        in str(e)
+        in str(excinfo.value)
     )
 
 
