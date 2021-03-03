@@ -13,6 +13,8 @@ Fido
 .. image:: https://img.shields.io/pypi/pyversions/fido.svg
   :target: https://pypi.python.org/pypi/fido/
   :alt: Supported Python versions
+  
+Fido is now RETIRED, meaning that it will no longer be updated. Please consider using other libraries such as aiohttp.
 
 Introduction
 ============
